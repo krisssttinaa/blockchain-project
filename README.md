@@ -1,2 +1,2 @@
 # blockchain-project
-Blockchian implimentation
+Blockchain implementation
