@@ -1,61 +1,54 @@
-package blockchain;
-
-import blockchain.Block;
-import main.Transaction;
-import old_main.Miner;
-
-import java.util.ArrayList;
+package blockchain;import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+
 public class Blockchain {
     private List<Block> chain;
+    private Map<String, TransactionOutput> UTXOs;
+
     public Blockchain() {
-        this.chain = new ArrayList<>();
+        chain = new ArrayList<>();
+        UTXOs = new HashMap<>();  // Corrected initialization
         addGenesisBlock();
     }
 
+    // Create and add the genesis block
     private void addGenesisBlock() {
-        //System.out.println("Am i here");
-        Block genesisBlock = new Block(0, "0000000000000000000000000000000000000000000000000000000000000000",
-                (new Transaction("", (new Miner("")), 0)));
-        //System.out.println("Here");
-        chain.add(genesisBlock);
-        System.out.println("Genesis Block added successfully!");
-    }
-    public void addBlock(Block block) {
-        if (isValidBlock(block)) {
-            chain.add(block);
-        } else {
-            System.out.println("Invalid block - Proof of work not satisfied or previous hash mismatch.");
-        }
+        chain.add(new Block(0, "0", "Genesis Block"));
     }
 
-    private boolean isValidBlock(Block block) {
-        Block previousBlock = getLatestBlock();
-        // Check if the proof of work is valid
-        if (!block.getHash().startsWith("00000")) {
-            return false;
-        }
-        // Check if the previous hash points to the previous block
-        if (!block.getPreviousHash().equals(previousBlock.getHash())) {
-            return false;
+    // Add a new block to the blockchain
+    public void addBlock(Block newBlock) {
+        newBlock.mineBlock(4); // Mine the block with difficulty 4 (adjust as needed)
+        chain.add(newBlock);
+    }
+
+    // Validate the integrity of the blockchain
+    public boolean isValidChain() {
+        Block currentBlock;
+        Block previousBlock;
+
+        for (int i = 1; i < chain.size(); i++) {
+            currentBlock = chain.get(i);
+            previousBlock = chain.get(i - 1);
+
+            if (!currentBlock.getHash().equals(currentBlock.calculateHash())) {
+                System.out.println("Current Block Hashes not equal");
+                return false;
+            }
+
+            if (!previousBlock.getHash().equals(currentBlock.getPreviousHash())) {
+                System.out.println("Previous Block Hashes not equal");
+                return false;
+            }
         }
 
         return true;
     }
 
-    public Block getLatestBlock() { return chain.get(chain.size() - 1);}
-
-    public List<Block> getChain() { return chain;}
+    // Get the latest block in the blockchain
+    public Block getLatestBlock() {
+        return chain.get(chain.size() - 1);
+    }
 }
-
-/*
-    public void addBlock(Block block) {
-        if (isValidBlock(block)) {
-            chain.add(block);
-        }
-    }
-
-    private boolean isValidBlock(Block block) {
-        return block.getPreviousHash().equals(getLatestBlock().getHash());
-    }
-*/
