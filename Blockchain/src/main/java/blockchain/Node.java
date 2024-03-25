@@ -1,4 +1,4 @@
-package blockchain;
+/*package blockchain;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -45,3 +45,4 @@ public class Node {
         return wallet;
     }
 }
+*/

@@ -1,4 +1,4 @@
-package blockchain;
+package main;
 
 public class TransactionOutput_old {
     private String recipient;

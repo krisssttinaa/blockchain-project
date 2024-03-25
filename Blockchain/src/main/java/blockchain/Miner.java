@@ -1,4 +1,4 @@
-package blockchain;
+/*package blockchain;
 public class Miner {
     private String minerName;
     private double reward;
@@ -31,3 +31,4 @@ public class Miner {
         this.reward = reward;
     }
 }
+*/

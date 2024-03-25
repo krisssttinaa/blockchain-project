@@ -39,7 +39,7 @@ public class Wallet {
 
     // Generates and returns a new transaction from this wallet.
     public Transaction sendFunds(PublicKey _recipient,float value ) {
-        if(getBalance() <= value) { //gather balance and check funds.
+        if(getBalance() < value) { //gather balance and check funds.
             System.out.println("#Not Enough funds to send transaction. Transaction Discarded.");
             return null;
         }
@@ -48,21 +48,21 @@ public class Wallet {
 
         float total = 0;
         for (String utxoId : Main.UTXOs.keySet()) {
-            TransactionOutput utxo = Main.UTXOs.get(utxoId);
-            if(utxo.isMine(this.publicKey)) {
+            TransactionOutput utxo = Main.UTXOs.get(utxoId);//retrieve each UTXO from the main list using the UTXO ID.
+            if(utxo.isMine(this.publicKey)) {//check if the UTXO belongs to the wallet (i.e., if it can be spent by this wallet).
                 total += utxo.value;
-                inputs.add(new TransactionInput(utxoId));
+                inputs.add(new TransactionInput(utxoId));//add it to the list of inputs for the new transaction
                 if(total > value) break;
             }
         }
 
-        Transaction newTransaction = new Transaction(publicKey, _recipient , value, inputs);
-        newTransaction.generateSignature(privateKey);
+        Transaction newTransaction = new Transaction(publicKey, _recipient, value, inputs); //new transaction object using the collected inputs and the transaction details.
+        newTransaction.generateSignature(privateKey);// cryptographic signature for the transaction to prove ownership of the UTXOs being spent
 
         for(TransactionInput input: inputs){
+            //Remove each input's corresponding UTXO from the main UTXO list, as it is now spent
             Main.UTXOs.remove(input.transactionOutputId);
         }
-
         return newTransaction;
     }
 }

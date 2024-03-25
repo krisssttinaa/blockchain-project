@@ -19,4 +19,8 @@ public class TransactionOutput {
     public boolean isMine(PublicKey publicKey) {
         return (publicKey.equals(recipient));
     }
+
+    public String getId() {
+        return id;
+    }
 }
