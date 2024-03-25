@@ -4,23 +4,24 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Node {
-    private List<Miner> miners;
+    private Wallet wallet;
     private Blockchain blockchain;
 
     public Node() {
-        miners = new ArrayList<>();
-        blockchain = new Blockchain();
+        this.blockchain = new Blockchain();
+        this.wallet = new Wallet();
     }
 
-    public void addMiner(Miner miner) {
-        miners.add(miner);
+    public void initialize() {
+        // Initialize components, if necessary
     }
 
     public void startMining() {
+        // Start mining blocks
         while (true) {
-            for (Miner miner : miners) {
-                miner.mine(blockchain);
-            }
+            Block newBlock = new Block(blockchain.getLatestBlock().getIndex() + 1, blockchain.getLatestBlock().getHash(), "Block data");
+            //newBlock.mineBlock(blockchain.getDifficulty());
+            blockchain.addBlock(newBlock);
             // Simulate some delay between mining attempts
             try {
                 Thread.sleep(1000); // Adjust delay as needed
@@ -30,7 +31,17 @@ public class Node {
         }
     }
 
+    public void startNetworkingService() {
+        // Start networking service to communicate with other nodes
+    }
+
+    // Getter for the blockchain
     public Blockchain getBlockchain() {
         return blockchain;
+    }
+
+    // Getter for the wallet
+    public Wallet getWallet() {
+        return wallet;
     }
 }

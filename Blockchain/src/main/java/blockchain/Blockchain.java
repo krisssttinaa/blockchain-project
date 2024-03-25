@@ -1,11 +1,15 @@
-package blockchain;import java.util.ArrayList;
+package blockchain;
+
+import com.google.gson.GsonBuilder;
+
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public class Blockchain {
     private List<Block> chain;
-    private Map<String, TransactionOutput> UTXOs;
+    private Map<String, TransactionOutput_old> UTXOs;
 
     public Blockchain() {
         chain = new ArrayList<>();
@@ -45,6 +49,12 @@ public class Blockchain {
         }
 
         return true;
+    }
+
+    public void printChain() {
+        String blockchainJson = new GsonBuilder().setPrettyPrinting().create().toJson(chain);
+        System.out.println("The block chain: ");
+        System.out.println(blockchainJson);
     }
 
     // Get the latest block in the blockchain
