@@ -1,21 +1,22 @@
 package blockchain;
 import java.security.*;
 import java.security.MessageDigest;
+import java.util.Arrays;
 import java.util.Base64;
+import org.bitcoinj.core.Base58;
 import java.security.Signature;
 
 public class StringUtil {
     // Applies ECDSA Signature and returns the result (as bytes).
     public static byte[] applyECDSASig(PrivateKey privateKey, String input) {
         Signature dsa;
-        byte[] output = new byte[0];
+        byte[] output;
         try {
             dsa = Signature.getInstance("ECDSA", "BC");
             dsa.initSign(privateKey);
             byte[] strByte = input.getBytes();
             dsa.update(strByte);
-            byte[] realSig = dsa.sign();
-            output = realSig;
+            output = dsa.sign();
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -34,7 +35,7 @@ public class StringUtil {
         }
     }
 
-    // Returns difficulty string target, to compare to hash. eg difficulty of 5 will return "00000"
+    // Returns difficulty string target, to compare to hash. e.g. difficulty of 5 will return "00000"
     public static String getDifficultyString(int difficulty) {
         return new String(new char[difficulty]).replace('\0', '0');
     }
@@ -45,9 +46,9 @@ public class StringUtil {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             // Applies sha256 to our input,
             byte[] hash = digest.digest(input.getBytes("UTF-8"));
-            StringBuffer hexString = new StringBuffer(); // This will contain hash as hexidecimal
-            for (int i = 0; i < hash.length; i++) {
-                String hex = Integer.toHexString(0xff & hash[i]);
+            StringBuilder hexString = new StringBuilder(); // This will contain hash as hexadecimal
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
                 if (hex.length() == 1) hexString.append('0');
                 hexString.append(hex);
             }
@@ -74,7 +75,7 @@ public class StringUtil {
         return bytesToHex(sig);
     }
 
-    // Utilize this method to convert a byte array to a SHA-256 hash byte array
+    // Utilize this method to convert a byte array to an SHA-256 hash byte array
     public static byte[] applySha256(byte[] input) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -89,58 +90,41 @@ public class StringUtil {
         return Base64.getEncoder().encodeToString(key.getEncoded());
     }
 
-
-}
-/*
-    // Derives a human-readable address from a public key using Base58Check encoding
-    public static String getAddressFromKey(PublicKey publicKey) {
-        byte[] hash = applySha256(publicKey.getEncoded());
-
-        // Version byte; 0x00 for Bitcoin's main network
-        byte[] versionedPayload = new byte[hash.length + 1];
-        versionedPayload[0] = 0;
-        System.arraycopy(hash, 0, versionedPayload, 1, hash.length);
-
-        // Double SHA-256 checksum
-        byte[] checksum = applySha256(applySha256(versionedPayload));
-
-        // Take the first 4 bytes of the second SHA-256 hash, this is the checksum
-        byte[] addressBytes = new byte[versionedPayload.length + 4];
-        System.arraycopy(versionedPayload, 0, addressBytes, 0, versionedPayload.length);
-        System.arraycopy(checksum, 0, addressBytes, versionedPayload.length, 4);
-
-        // Base58Check encode the version + payload + checksum
-        return Base58.encode(addressBytes);
-    }
-
     public static String toBase58Check(byte[] publicKeyHash) {
-    // Step 1: Add version byte (0x00 for Bitcoin)
-    byte[] versionedPayload = new byte[1 + publicKeyHash.length];
-    versionedPayload[0] = 0; // Bitcoin mainnet address
-    System.arraycopy(publicKeyHash, 0, versionedPayload, 1, publicKeyHash.length);
+        try {
+            // Step 1: Add version byte (0x00 for Bitcoin Main Network)
+            byte[] versionedPayload = new byte[1 + publicKeyHash.length];
+            versionedPayload[0] = 0; // Version byte for main network
+            System.arraycopy(publicKeyHash, 0, versionedPayload, 1, publicKeyHash.length);
 
-    // Step 2: Calculate the checksum (first 4 bytes of the double SHA-256)
-    byte[] checksum = sha256(sha256(versionedPayload)).readBytes(4);
+            // Step 2: Double SHA-256 to get checksum
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] firstSHA = digest.digest(versionedPayload);
+            byte[] secondSHA = digest.digest(firstSHA);
 
-    // Step 3: Append the checksum to the versioned payload
-    byte[] binaryAddress = new byte[versionedPayload.length + checksum.length];
-    System.arraycopy(versionedPayload, 0, binaryAddress, 0, versionedPayload.length);
-    System.arraycopy(checksum, 0, binaryAddress, versionedPayload.length, checksum.length);
+            // Step 3: Take the first 4 bytes of the second SHA-256 hash as checksum
+            byte[] checksum = Arrays.copyOfRange(secondSHA, 0, 4);
 
-    // Step 4: Convert the binary address to a Base58 string
-    String base58CheckAddress = Base58.encode(binaryAddress);
+            // Step 4: Append checksum to versioned payload
+            byte[] binaryAddress = new byte[versionedPayload.length + checksum.length];
+            System.arraycopy(versionedPayload, 0, binaryAddress, 0, versionedPayload.length);
+            System.arraycopy(checksum, 0, binaryAddress, versionedPayload.length, checksum.length);
 
-    return base58CheckAddress;
-}
+            // Step 5: Base58 encode the binary address
+            return Base58.encode(binaryAddress);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
 
-// Helper method to perform SHA-256 hashing
-private static byte[] sha256(byte[] data) {
-    try {
-        MessageDigest md = MessageDigest.getInstance("SHA-256");
-        return md.digest(data);
-    } catch (NoSuchAlgorithmException e) {
-        throw new RuntimeException(e); // Handle exception appropriately
+    // Helper method to perform SHA-256 hashing
+    private static byte[] sha256(byte[] data) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            return md.digest(data);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e); // Handle exception appropriately
+        }
     }
 }
-
-* */
