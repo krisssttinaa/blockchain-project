@@ -3,6 +3,7 @@ import java.security.*;
 import java.security.MessageDigest;
 import java.util.Base64;
 import java.security.Signature;
+
 public class StringUtil {
     // Applies ECDSA Signature and returns the result (as bytes).
     public static byte[] applyECDSASig(PrivateKey privateKey, String input) {
@@ -73,8 +74,6 @@ public class StringUtil {
         return bytesToHex(sig);
     }
 
-
-
     // Utilize this method to convert a byte array to a SHA-256 hash byte array
     public static byte[] applySha256(byte[] input) {
         try {
@@ -89,6 +88,8 @@ public class StringUtil {
     public static String getStringFromKey(Key key) {
         return Base64.getEncoder().encodeToString(key.getEncoded());
     }
+
+
 }
 /*
     // Derives a human-readable address from a public key using Base58Check encoding
@@ -111,4 +112,35 @@ public class StringUtil {
         // Base58Check encode the version + payload + checksum
         return Base58.encode(addressBytes);
     }
+
+    public static String toBase58Check(byte[] publicKeyHash) {
+    // Step 1: Add version byte (0x00 for Bitcoin)
+    byte[] versionedPayload = new byte[1 + publicKeyHash.length];
+    versionedPayload[0] = 0; // Bitcoin mainnet address
+    System.arraycopy(publicKeyHash, 0, versionedPayload, 1, publicKeyHash.length);
+
+    // Step 2: Calculate the checksum (first 4 bytes of the double SHA-256)
+    byte[] checksum = sha256(sha256(versionedPayload)).readBytes(4);
+
+    // Step 3: Append the checksum to the versioned payload
+    byte[] binaryAddress = new byte[versionedPayload.length + checksum.length];
+    System.arraycopy(versionedPayload, 0, binaryAddress, 0, versionedPayload.length);
+    System.arraycopy(checksum, 0, binaryAddress, versionedPayload.length, checksum.length);
+
+    // Step 4: Convert the binary address to a Base58 string
+    String base58CheckAddress = Base58.encode(binaryAddress);
+
+    return base58CheckAddress;
+}
+
+// Helper method to perform SHA-256 hashing
+private static byte[] sha256(byte[] data) {
+    try {
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
+        return md.digest(data);
+    } catch (NoSuchAlgorithmException e) {
+        throw new RuntimeException(e); // Handle exception appropriately
+    }
+}
+
 * */

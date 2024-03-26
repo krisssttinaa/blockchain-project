@@ -1,5 +1,4 @@
 package networking;
-
 import blockchain.Block;
 import blockchain.Transaction;
 
@@ -10,4 +9,3 @@ public interface NetworkNode {
     void broadcastNewBlock(Block block);
     void syncBlockchain();
 }
-

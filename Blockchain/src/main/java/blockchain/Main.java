@@ -11,7 +11,6 @@ public class Main {
         Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
 
         Blockchain blockchain = new Blockchain(); // Initialize the blockchain with the genesis block
-
         Wallet walletA = new Wallet(); // Create a wallet for testing
 
         while (true) {
@@ -24,7 +23,6 @@ public class Main {
                 newBlock.addTransaction(newTransaction);
                 blockchain.addBlock(newBlock);
             }
-
             // Print the blockchain status
             blockchain.printChain();
         }

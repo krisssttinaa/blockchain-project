@@ -1,5 +1,4 @@
 package networking;
-
 import blockchain.Block;
 import blockchain.Blockchain;
 import blockchain.Transaction;

@@ -1,5 +1,4 @@
 package blockchain;
-
 import com.google.gson.GsonBuilder;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -7,7 +6,7 @@ import java.util.List;
 
 public class Blockchain {
     private List<Block> chain;
-    public static HashMap<String, TransactionOutput> UTXOs = new HashMap<>(); // Use the correct TransactionOutput class
+    public static HashMap<String, TransactionOutput> UTXOs = new HashMap<>();
 
     public Blockchain() {
         chain = new ArrayList<>();
@@ -56,7 +55,6 @@ public class Blockchain {
                 return false;
             }
         }
-
         return true;
     }
 
@@ -66,7 +64,6 @@ public class Blockchain {
         System.out.println(blockchainJson);
     }
 
-    // Get the latest block in the blockchain
     public Block getLatestBlock() {
         return chain.get(chain.size() - 1);
     }

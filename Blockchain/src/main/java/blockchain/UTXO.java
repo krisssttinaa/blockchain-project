@@ -1,5 +1,7 @@
 package blockchain;
 import java.security.PublicKey;
+
+import com.google.gson.Gson;
 import com.google.gson.annotations.Expose;//marks certain fields to be exposed for JSON serialization and deserialization.
 
 public class UTXO {
@@ -29,21 +31,22 @@ public class UTXO {
     @Override
     public int hashCode() {return id.hashCode();}
 
+    // Convert UTXO object to JSON string, method to serialize UTXO for storage or network transmission
+    public String toJSON() {
+        Gson gson = new Gson();
+        return gson.toJson(this);
+    }
+
+    // Convert JSON string to UTXO object, method to create a UTXO from a JSON string (deserialization)
+    public static UTXO fromJSON(String json) {
+        Gson gson = new Gson();
+        return gson.fromJson(json, UTXO.class);
+    }
+
     // Getters and Setters
     public String getId() {return id;}
     public PublicKey getOwner() {return owner;}
     public void setOwner(PublicKey owner) {this.owner = owner;}
     public double getAmount() {return amount;}
     public void setAmount(double amount) {this.amount = amount;}
-
-    // method to serialize UTXO for storage or network transmission
-    // For example, you might convert the UTXO to a JSON string if you want to store it or send it over a network
-    // public String toJSON() {
-    //     // Implement JSON serialization
-    // }
-
-    // method to create a UTXO from a JSON string (deserialization)
-    // public static UTXO fromJSON(String json) {
-    //     // Implement JSON deserialization
-    // }
 }
