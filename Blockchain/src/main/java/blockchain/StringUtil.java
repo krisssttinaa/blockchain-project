@@ -2,7 +2,7 @@ package blockchain;
 import java.security.*;
 import java.security.MessageDigest;
 import java.util.Base64;
-
+import java.security.Signature;
 public class StringUtil {
     // Applies ECDSA Signature and returns the result (as bytes).
     public static byte[] applyECDSASig(PrivateKey privateKey, String input) {
@@ -56,8 +56,59 @@ public class StringUtil {
         }
     }
 
+    // Converts the signature bytes into a hexadecimal string
+    public static String bytesToHex(byte[] bytes) {
+        StringBuilder hexString = new StringBuilder();
+        for (byte b : bytes) {
+            String hex = Integer.toHexString(0xff & b);
+            if (hex.length() == 1) hexString.append('0');
+            hexString.append(hex);
+        }
+        return hexString.toString();
+    }
+
+    // Use this method when displaying the signature
+    public static String applyECDSASigAndGetString(PrivateKey privateKey, String input) {
+        byte[] sig = applyECDSASig(privateKey, input);
+        return bytesToHex(sig);
+    }
+
+
+
+    // Utilize this method to convert a byte array to a SHA-256 hash byte array
+    public static byte[] applySha256(byte[] input) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return digest.digest(input);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     // Gets the encoded string from any key.
     public static String getStringFromKey(Key key) {
         return Base64.getEncoder().encodeToString(key.getEncoded());
     }
 }
+/*
+    // Derives a human-readable address from a public key using Base58Check encoding
+    public static String getAddressFromKey(PublicKey publicKey) {
+        byte[] hash = applySha256(publicKey.getEncoded());
+
+        // Version byte; 0x00 for Bitcoin's main network
+        byte[] versionedPayload = new byte[hash.length + 1];
+        versionedPayload[0] = 0;
+        System.arraycopy(hash, 0, versionedPayload, 1, hash.length);
+
+        // Double SHA-256 checksum
+        byte[] checksum = applySha256(applySha256(versionedPayload));
+
+        // Take the first 4 bytes of the second SHA-256 hash, this is the checksum
+        byte[] addressBytes = new byte[versionedPayload.length + 4];
+        System.arraycopy(versionedPayload, 0, addressBytes, 0, versionedPayload.length);
+        System.arraycopy(checksum, 0, addressBytes, versionedPayload.length, 4);
+
+        // Base58Check encode the version + payload + checksum
+        return Base58.encode(addressBytes);
+    }
+* */

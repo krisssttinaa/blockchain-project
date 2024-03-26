@@ -5,7 +5,7 @@ import java.util.HashMap;
 public class Main {
     public static HashMap<String, TransactionOutput> UTXOs = new HashMap<>(); // List of all unspent transactions.
     public static float minimumTransaction = 0.1f; // Minimum transaction value.
-    public static int difficulty = 8; // Difficulty level for mining.
+    public static int difficulty = 7; // Difficulty level for mining.
 
     public static void main(String[] args) {
         Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
@@ -25,12 +25,8 @@ public class Main {
                 blockchain.addBlock(newBlock);
             }
 
-            // Optional: Add a mechanism to break the loop, such as a specific condition or user input
-
             // Print the blockchain status
             blockchain.printChain();
-
-            // Optional: Add a delay between iterations
         }
     }
 }

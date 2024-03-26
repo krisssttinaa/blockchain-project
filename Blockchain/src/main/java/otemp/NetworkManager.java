@@ -1,4 +1,4 @@
-package networking;
+package otemp;
 
 public class NetworkManager {
 }
