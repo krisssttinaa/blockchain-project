@@ -20,7 +20,5 @@ public class TransactionOutput {
         return (publicKey.equals(recipient));
     }
 
-    public String getId() {
-        return id;
-    }
+    public String getId() {return id;}
 }

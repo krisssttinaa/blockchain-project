@@ -1,8 +1,12 @@
 package networking;
 
 public enum MessageType {
-    NEW_TRANSACTION,
-    NEW_BLOCK,
-    BLOCKCHAIN_REQUEST,
-    BLOCKCHAIN_RESPONSE
+    NEW_TRANSACTION, //for sending new transactions
+    NEW_BLOCK, //for sending new blocks
+    BLOCKCHAIN_REQUEST, //for requesting the blockchain
+    BLOCKCHAIN_RESPONSE, //for sending the blockchain
+    PEER_DISCOVERY_RESPONSE, //for responding to peer discovery requests
+    PEER_DISCOVERY_REQUEST, //for requesting peer discovery
+    PEER_DISCOVERY_ACK, //for acknowledging peer discovery
+    TRANSACTION_CONFIRMATION //for acknowledging receipt of transactions
 }

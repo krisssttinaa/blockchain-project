@@ -39,5 +39,6 @@ public class BlockchainNode implements NetworkNode {
         // Request the latest blockchain data from peers and synchronize
     }
 
+
     //methods for handling incoming messages, etc.
 }

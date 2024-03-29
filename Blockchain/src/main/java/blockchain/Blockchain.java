@@ -18,6 +18,7 @@ public class Blockchain {
         Block genesisBlock = new Block(0, "0");
         // Add some initial transactions to the genesis block if necessary
         chain.add(genesisBlock);
+        System.out.println("Genesis Block Added");
     }
 
     public void addBlock(Block newBlock) {
@@ -25,6 +26,15 @@ public class Blockchain {
         chain.add(newBlock);
         // Update UTXOs: Remove spent ones and add new ones
         updateUTXOs(newBlock);
+
+        // Print the details of the newly added block
+        System.out.println("New Block Added:");
+        System.out.println("Index: " + newBlock.getIndex());
+        System.out.println("Timestamp: " + newBlock.getTimestamp());
+        System.out.println("Previous Hash: " + newBlock.getPreviousHash());
+        System.out.println("Hash: " + newBlock.getHash());
+        System.out.println("Transactions: " + newBlock.getTransactions().size());
+        System.out.println();
     }
 
     private void updateUTXOs(Block block) {

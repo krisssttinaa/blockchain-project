@@ -4,15 +4,15 @@ import java.util.HashMap;
 
 public class Main {
     public static HashMap<String, TransactionOutput> UTXOs = new HashMap<>(); // List of all unspent transactions.
-    public static float minimumTransaction = 0.1f; // Minimum transaction value.
-    public static int difficulty = 7; // Difficulty level for mining.
+    public static float minimumTransaction = 0; // Minimum transaction value.
+    public static int difficulty = 6; // Difficulty level for mining.
 
     public static void main(String[] args) {
         Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
 
         Blockchain blockchain = new Blockchain(); // Initialize the blockchain with the genesis block
         Wallet walletA = new Wallet(); // Create a wallet for testing
-
+        //Wallet recipientWallet = new Wallet(); // Simulate a recipient wallet
         while (true) {
             // Simulate creating a transaction from walletA to a new recipient
             Wallet recipientWallet = new Wallet(); // Simulate a recipient wallet
@@ -24,9 +24,19 @@ public class Main {
                 blockchain.addBlock(newBlock);
             }
             // Print the blockchain status
-            blockchain.printChain();
+            //blockchain.printChain();
+            printUTXOs();
         }
     }
+    public static void printUTXOs() {
+        System.out.println("Current UTXOs:");
+        for (String id : UTXOs.keySet()) {
+            TransactionOutput utxo = UTXOs.get(id);
+            System.out.println("UTXO ID: " + id + ", Amount: " + utxo.value + ", Owner: " + StringUtil.getStringFromKey(utxo.recipient));
+            System.out.println();
+        }
+    }
+
 }
 
 

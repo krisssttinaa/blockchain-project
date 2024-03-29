@@ -102,7 +102,6 @@ public class Transaction {
     public List<TransactionInput> getInputs() {
         return inputs;
     }
-
     public List<TransactionOutput> getOutputs() {
         return outputs;
     }
