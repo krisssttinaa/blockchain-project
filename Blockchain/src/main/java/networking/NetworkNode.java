@@ -7,5 +7,9 @@ public interface NetworkNode {
     void disconnectFromPeer(String peerAddress);
     void broadcastTransaction(Transaction transaction);
     void broadcastNewBlock(Block block);
+    void validateBlock(Block block);
+    void requestLatestBlock();
+    void sharePeersList();
+    void handleRequest(Message request);
     void syncBlockchain();
 }
