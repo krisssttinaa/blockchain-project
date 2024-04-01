@@ -7,7 +7,6 @@ public class TransactionOutput {
     public float value; // The amount of coins they own.
     public String parentTransactionId; // The id of the transaction this output was created in.
 
-    // Constructor
     public TransactionOutput(PublicKey recipient, float value, String parentTransactionId) {
         this.recipient = recipient;
         this.value = value;

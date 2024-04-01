@@ -1,9 +1,12 @@
 package blockchain;
 import java.security.Security;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 public class Main {
     public static HashMap<String, TransactionOutput> UTXOs = new HashMap<>(); // List of all unspent transactions.
+    public static List<Transaction> unconfirmedTransactions = new ArrayList<>();
     public static float minimumTransaction = 0; // Minimum transaction value.
     public static int difficulty = 6; // Difficulty level for mining.
 

@@ -3,6 +3,8 @@ import java.security.*;
 import java.util.ArrayList;
 import java.util.List;
 
+import static blockchain.Main.unconfirmedTransactions;
+
 public class Transaction {
     public String transactionId; //unique identifier for the transaction, hash of the transaction's contents
     public PublicKey sender; //public key/address
@@ -49,9 +51,47 @@ public class Transaction {
             return false;
         }
 
-        //Gathers transaction inputs (Making sure they are unspent):
-        for(TransactionInput i : inputs) {
+        // Gather transaction inputs
+        float inputSum = 0;
+        for (TransactionInput i : inputs) {
             i.UTXO = Main.UTXOs.get(i.transactionOutputId);
+            if (i.UTXO == null) {
+                System.out.println("#Referenced input on Transaction(" + transactionId + ") is Missing or Invalid");
+                return false;
+            }
+            if (!i.UTXO.isMine(this.sender)) {
+                System.out.println("#Transaction Input does not belong to the sender");
+                return false;
+            }
+            inputSum += i.UTXO.value;
+        }
+
+        // Validate total output value equals input value
+        float outputSum = getOutputsValue();
+        if (inputSum != outputSum) {
+            System.out.println("#Input values and output values do not match");
+            return false;
+        }
+
+        // Gather transaction inputs and check for double spending
+        for (TransactionInput i : inputs) {
+            i.UTXO = Main.UTXOs.get(i.transactionOutputId);
+            if (i.UTXO == null) {
+                System.out.println("#Referenced input on Transaction(" + transactionId + ") is Missing or Invalid");
+                return false;
+            }
+        }
+
+        // Check unconfirmed transactions for double spending
+        for (TransactionInput i : inputs) {
+            for (Transaction pendingTx : unconfirmedTransactions) {
+                for (TransactionInput pendingInput : pendingTx.inputs) {
+                    if (pendingInput.transactionOutputId.equals(i.transactionOutputId)) {
+                        System.out.println("#Input Transaction(" + i.transactionOutputId + ") is already spent in an unconfirmed transaction");
+                        return false;
+                    }
+                }
+            }
         }
 
         //Checks if transaction is valid:
@@ -76,7 +116,6 @@ public class Transaction {
             if(i.UTXO == null) continue; //if Transaction can't be found skip it
             Main.UTXOs.remove(i.UTXO.id);
         }
-
         return true;
     }
 
