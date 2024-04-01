@@ -46,43 +46,23 @@ public class Transaction {
     // Returns true if new transaction could be created
     // Returns true if new transaction could be created
     public boolean processTransaction() {
-        if(!verifySignature()) {
+        if (!verifySignature()) {
             System.out.println("#Transaction Signature failed to verify");
             return false;
         }
 
-        // Gather transaction inputs
+        // Gather and validate transaction inputs
         float inputSum = 0;
         for (TransactionInput i : inputs) {
             i.UTXO = Main.UTXOs.get(i.transactionOutputId);
-            if (i.UTXO == null) {
-                System.out.println("#Referenced input on Transaction(" + transactionId + ") is Missing or Invalid");
-                return false;
-            }
-            if (!i.UTXO.isMine(this.sender)) {
-                System.out.println("#Transaction Input does not belong to the sender");
+            if (i.UTXO == null || !i.UTXO.isMine(this.sender)) {
+                System.out.println("#Referenced input on Transaction(" + transactionId + ") is Missing, Invalid, or does not belong to the sender");
                 return false;
             }
             inputSum += i.UTXO.value;
         }
 
-        // Validate total output value equals input value
-        float outputSum = getOutputsValue();
-        if (inputSum != outputSum) {
-            System.out.println("#Input values and output values do not match");
-            return false;
-        }
-
-        // Gather transaction inputs and check for double spending
-        for (TransactionInput i : inputs) {
-            i.UTXO = Main.UTXOs.get(i.transactionOutputId);
-            if (i.UTXO == null) {
-                System.out.println("#Referenced input on Transaction(" + transactionId + ") is Missing or Invalid");
-                return false;
-            }
-        }
-
-        // Check unconfirmed transactions for double spending
+        // Check for double spending in the pool of unconfirmed transactions
         for (TransactionInput i : inputs) {
             for (Transaction pendingTx : unconfirmedTransactions) {
                 for (TransactionInput pendingInput : pendingTx.inputs) {
@@ -94,28 +74,23 @@ public class Transaction {
             }
         }
 
-        //Checks if transaction is valid:
-        if(getInputsValue() < Main.minimumTransaction) {
-            System.out.println("#Transaction Inputs too small: " + getInputsValue());
+        // Check if transaction meets the minimum transaction value requirement
+        if (inputSum < Main.minimumTransaction) {
+            System.out.println("#Transaction Inputs too small: " + inputSum);
             return false;
         }
 
-        //Generate transaction outputs:
-        float leftOver = getInputsValue() - value; //difference btw the total input value and the transaction value
+        // Calculate transaction hash
         transactionId = calculateHash();
-        outputs.add(new TransactionOutput( this.recipient, value,transactionId)); //send value to recipient
-        outputs.add(new TransactionOutput( this.sender, leftOver,transactionId)); //send the left over 'change' back to sender
 
-        //Add outputs to Unspent list
-        for(TransactionOutput o : outputs) {
-            Main.UTXOs.put(o.id , o);
-        }
+        // Generate transaction outputs
+        float leftOver = inputSum - value; // Calculate 'change'
+        outputs.add(new TransactionOutput(this.recipient, value, transactionId)); // Value to recipient
+        outputs.add(new TransactionOutput(this.sender, leftOver, transactionId)); // 'Change' back to sender
 
-        //Remove transaction inputs from UTXO lists as spent:
-        for(TransactionInput i : inputs) {
-            if(i.UTXO == null) continue; //if Transaction can't be found skip it
-            Main.UTXOs.remove(i.UTXO.id);
-        }
+        // Update UTXOs
+        for (TransactionOutput o : outputs) {Main.UTXOs.put(o.id, o);}
+        for (TransactionInput i : inputs) {Main.UTXOs.remove(i.UTXO.id);}
         return true;
     }
 
