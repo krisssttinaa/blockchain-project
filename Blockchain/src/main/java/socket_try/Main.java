@@ -1,4 +1,4 @@
-package communication;
+package socket_try;
 
 import java.io.IOException;
 

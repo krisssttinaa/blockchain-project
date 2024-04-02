@@ -11,11 +11,17 @@ public class Block {
     private String hash;
     private int nonce;
 
+    // Existing constructor
     public Block(int index, String previousHash) {
+        this(index, previousHash, new ArrayList<>()); // Call the overloaded constructor with an empty list
+    }
+
+    // Modified constructor to accept a list of transactions
+    public Block(int index, String previousHash, List<Transaction> transactions) {
         this.index = index;
         this.previousHash = previousHash;
         this.timestamp = new Date().getTime();
-        this.transactions = new ArrayList<>();
+        this.transactions = transactions != null ? new ArrayList<>(transactions) : new ArrayList<>();
         this.nonce = 0;
         this.hash = calculateHash();
     }
@@ -31,15 +37,6 @@ public class Block {
         return StringUtil.applySha256(
                 previousHash + timestamp + index + transactionsData + nonce
         );
-    }
-
-    public void mineBlock(int difficulty) {
-        String target = StringUtil.getDifficultyString(difficulty);
-        while (!hash.substring(0, difficulty).equals(target)) {
-            nonce++;
-            hash = calculateHash();
-        }
-        //System.out.println("Block Mined: " + hash);
     }
 
     // Method to add a transaction to this block
@@ -60,16 +57,33 @@ public class Block {
         return true;
     }
 
+    // New method to recalculate the block's hash
+    public void updateHash() {
+        this.hash = calculateHash(); // Recalculate hash with the current nonce value
+    }
+
+    // Increment the nonce value
+    public void incrementNonce() {
+        this.nonce++;
+    }
+
     // Getters
-    public int getIndex() {
-        return index;
-    }
-    public String getPreviousHash() {
-        return previousHash;
-    }
+    public int getIndex() {return index;}
+    public String getPreviousHash() {return previousHash;}
     public long getTimestamp() {return timestamp;}
-    public String getHash() {
-        return hash;
-    }
+    public String getHash() {return hash;}
     public List<Transaction> getTransactions() {return transactions;}
+    public int getNonce() {return nonce;}
 }
+
+/*
+    public void mineBlock(int difficulty) {
+        String target = StringUtil.getDifficultyString(difficulty);
+        while (!hash.substring(0, difficulty).equals(target)) {
+            nonce++;
+            hash = calculateHash();
+        }
+        //System.out.println("Block Mined: " + hash);
+    }
+*
+* */

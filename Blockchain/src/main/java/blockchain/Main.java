@@ -1,4 +1,6 @@
 package blockchain;
+import networking.Node;
+
 import java.security.Security;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -10,6 +12,54 @@ public class Main {
     public static float minimumTransaction = 0; // Minimum transaction value.
     public static int difficulty = 6; // Difficulty level for mining.
 
+    public static void main(String[] args) {
+        // Add Bouncy Castle as the security provider
+        Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
+
+        // Initialize the blockchain
+        Blockchain blockchain = new Blockchain();
+
+        // Create wallets
+        Wallet walletA = new Wallet();
+        Wallet walletB = new Wallet();
+
+        // Print wallet details for debugging
+        System.out.println("Wallet A's public key: " + StringUtil.getStringFromKey(walletA.publicKey));
+        System.out.println("Wallet B's public key: " + StringUtil.getStringFromKey(walletB.publicKey));
+
+        // Simulate transactions
+        // Here you would simulate creating transactions, for example:
+        Transaction transaction = walletA.sendFunds(walletB.publicKey, 0); // Send 5 coins from walletA to walletB
+        if (transaction != null) {
+            blockchain.addTransaction(transaction); // Add transaction to the pool of unconfirmed transactions
+        }
+
+        // Attempt to mine a block and add it to the chain
+        blockchain.createAndAddBlock();
+
+        // Optional: Start the networking service if your application is networked
+        Node node = new Node(blockchain);
+        // Here you would start listening for connections, connect to peers, etc.
+        // For example: node.connectToPeer("192.168.1.2:5000");
+
+        // Print the current state of the blockchain
+        blockchain.printChain();
+
+        // Verify the integrity of the blockchain
+        System.out.println("Blockchain is valid: " + blockchain.isValidChain());
+    }
+    public static void printUTXOs() {
+        System.out.println("Current UTXOs:");
+        for (String id : UTXOs.keySet()) {
+            TransactionOutput utxo = UTXOs.get(id);
+            System.out.println("UTXO ID: " + id + ", Amount: " + utxo.value + ", Owner: " + StringUtil.getStringFromKey(utxo.recipient));
+            System.out.println();
+        }
+    }
+
+}
+
+/*
     public static void main(String[] args) {
         Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
 
@@ -31,108 +81,4 @@ public class Main {
             printUTXOs();
         }
     }
-    public static void printUTXOs() {
-        System.out.println("Current UTXOs:");
-        for (String id : UTXOs.keySet()) {
-            TransactionOutput utxo = UTXOs.get(id);
-            System.out.println("UTXO ID: " + id + ", Amount: " + utxo.value + ", Owner: " + StringUtil.getStringFromKey(utxo.recipient));
-            System.out.println();
-        }
-    }
-
-}
-
-
-/*
-package blockchain;
-
-import java.security.Security;
-
-public class Main {
-
-    public static void main(String[] args) {
-        // Setup Bouncy Castle as a Security Provider
-        Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
-
-        // Create a node
-        Node node = new Node();
-
-        // Initialize the node with its wallet and blockchain
-        node.initialize();
-
-        // Optionally start mining, or start listening for transactions and blocks
-        node.startMining();
-
-        // You might also want to start a networking service to listen for messages from other nodes
-        node.startNetworkingService();
-    }
-}
-
-* */
-// Other classes such as Block and Blockchain will be updated as needed to fit this structure.
-
-
-/*
-//main for blockchain
-public class Main {
-    public static void main(String[] args) {
-        try {
-            // Create a node
-            Node node = new Node();
-
-            // Create a miner and add it to the node
-            Miner miner = new Miner("Miner");
-            node.addMiner(miner);
-
-            // Start mining
-            node.startMining();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-}
-*/
-
-
-/*
-
-public class Main {
-    public static HashMap<String, TransactionOutput> UTXOs = new HashMap<>(); // List of all unspent transactions.
-    public static float minimumTransaction = 0.1f; // Minimum transaction value.
-    public static Blockchain blockchain = new Blockchain(); // The blockchain for this node.
-    public static int difficulty = 4; // Difficulty level for mining.
-
-    public static void main(String[] args) {
-        // Set up Bouncy Castle as a Security Provider.
-        Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
-
-        // Create wallets for testing.
-        Wallet walletA = new Wallet();
-        //Wallet walletB = new Wallet();
-
-        // Display public and private keys.
-        System.out.println("Private and public keys:");
-        System.out.println(StringUtil.getStringFromKey(walletA.privateKey));
-        System.out.println(StringUtil.getStringFromKey(walletA.publicKey));
-
-        // Create and process a test transaction from WalletA to walletB.
-        Transaction transaction = walletA.sendFunds(walletA.publicKey, 0);
-
-        // Add the genesis block to the blockchain (this should include the first transaction in its data).
-        Block genesisBlock = new Block(0, "0", "Genesis Block");
-        genesisBlock.mineBlock(difficulty);
-        blockchain.addBlock(genesisBlock);
-
-        // Here, the node would continue its normal operation, mining new blocks and processing transactions.
-
-        // Print the blockchain.
-        blockchain.printChain();
-    }
-
-    public static Boolean isChainValid() {
-        // This method should be moved into the Blockchain class.
-        // It checks the integrity of the blockchain and ensures that the chain is valid.
-        return blockchain.isValidChain();
-    }
-}
 * */
