@@ -1,6 +1,6 @@
 package blockchain;
+import networking.NetworkManager;
 import networking.Node;
-
 import java.security.Security;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -12,10 +12,12 @@ public class Main {
     public static float minimumTransaction = 0; // Minimum transaction value.
     public static int difficulty = 6; // Difficulty level for mining.
 
+
+
     public static void main(String[] args) {
         // Add Bouncy Castle as the security provider
         Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
-
+        NetworkManager networkManager = new NetworkManager();
         // Initialize the blockchain
         Blockchain blockchain = new Blockchain();
 
@@ -38,9 +40,9 @@ public class Main {
         blockchain.createAndAddBlock();
 
         // Optional: Start the networking service if your application is networked
-        Node node = new Node(blockchain);
-        // Here you would start listening for connections, connect to peers, etc.
-        // For example: node.connectToPeer("192.168.1.2:5000");
+        //Node node = new Node(blockchain);
+        // listening for connections, connect to peers bla bla
+        // node.connectToPeer("192.168.1.2:5000");
 
         // Print the current state of the blockchain
         blockchain.printChain();

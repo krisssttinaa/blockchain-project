@@ -3,7 +3,6 @@ import java.security.*;
 import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.Base64;
-import org.bitcoinj.core.Base58;
 import java.security.Signature;
 
 public class StringUtil {
@@ -88,34 +87,6 @@ public class StringUtil {
     // Gets the encoded string from any key.
     public static String getStringFromKey(Key key) {
         return Base64.getEncoder().encodeToString(key.getEncoded());
-    }
-
-    public static String toBase58Check(byte[] publicKeyHash) {
-        try {
-            // Step 1: Add version byte (0x00 for Bitcoin Main Network)
-            byte[] versionedPayload = new byte[1 + publicKeyHash.length];
-            versionedPayload[0] = 0; // Version byte for main network
-            System.arraycopy(publicKeyHash, 0, versionedPayload, 1, publicKeyHash.length);
-
-            // Step 2: Double SHA-256 to get checksum
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] firstSHA = digest.digest(versionedPayload);
-            byte[] secondSHA = digest.digest(firstSHA);
-
-            // Step 3: Take the first 4 bytes of the second SHA-256 hash as checksum
-            byte[] checksum = Arrays.copyOfRange(secondSHA, 0, 4);
-
-            // Step 4: Append checksum to versioned payload
-            byte[] binaryAddress = new byte[versionedPayload.length + checksum.length];
-            System.arraycopy(versionedPayload, 0, binaryAddress, 0, versionedPayload.length);
-            System.arraycopy(checksum, 0, binaryAddress, versionedPayload.length, checksum.length);
-
-            // Step 5: Base58 encode the binary address
-            return Base58.encode(binaryAddress);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
-        }
     }
 
     // Helper method to perform SHA-256 hashing

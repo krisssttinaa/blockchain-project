@@ -6,6 +6,7 @@ import blockchain.Transaction;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.io.*;
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -13,9 +14,52 @@ import java.util.Set;
 
 
 public class Node implements NetworkNode {
-    private HashMap<String, Socket> peerSockets = new HashMap<>();
+    private HashMap<String, Socket> peerSockets = new HashMap<>(); int PORT = 7777;
     private Set<String> peers = new HashSet<>();
     private Blockchain blockchain;
+    private ServerSocket serverSocket;
+    public Node(int port) throws IOException {
+        serverSocket = new ServerSocket(port);
+    }
+
+    public void start() {
+        // Start a new thread to listen for incoming connections
+        new Thread(() -> {
+            while (true) {
+                try {
+                    Socket clientSocket = serverSocket.accept();
+                    handleClient(clientSocket);  // Handle the client connection in a separate method/thread
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+    }
+
+    private void handleClient(Socket clientSocket) {
+        // Handle the client connection in a new thread or using a thread pool
+        new Thread(() -> {
+            try (InputStream in = clientSocket.getInputStream();
+                 OutputStream out = clientSocket.getOutputStream()) {
+                // Read data from the client, process it, and optionally write a response
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }).start();
+    }
+
+    // Method to broadcast data to all known peers
+    public void broadcast(String data) {
+        for (String peerAddress : peers) {
+            try (Socket socket = new Socket(peerAddress, PORT)) {  // Assuming a common port for simplicity
+                OutputStream out = socket.getOutputStream();
+                out.write(data.getBytes());
+                out.flush();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
 
     public Node(Blockchain blockchain) {
         this.blockchain = blockchain;
@@ -170,5 +214,9 @@ public class Node implements NetworkNode {
     @Override
     public void requestLatestBlock() {
 
+    }
+
+    public String getIp() {
+        return serverSocket.getInetAddress().getHostAddress();
     }
 }
