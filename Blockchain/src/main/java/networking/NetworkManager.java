@@ -3,23 +3,62 @@ package networking;
 import com.google.gson.Gson;
 import java.io.IOException;
 import java.net.NetworkInterface;
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
-import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class NetworkManager {
-    //Hashmap of nodes where key is IP, and value is the connection
-    //so that if I want to send something I will say nodes.get(ip).send(message) //some helper functions
-    public HashMap<String, Node> nodes;
-    public NetworkManager(){
-        nodes= new HashMap<>();
-        getMyIpAddress();
-        try {
-            Server server = new Server(7777, this);
-            server.start();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+    private final Map<String, Node> nodes;
+    private final ExecutorService networkPool;
+    private final int serverPort=7777;
+
+    public NetworkManager() {
+        this.nodes = new ConcurrentHashMap<>();
+        this.networkPool = Executors.newCachedThreadPool();
+        startServer();
+    }
+
+    private void startServer() {
+        networkPool.submit(() -> {
+            try (ServerSocket serverSocket = new ServerSocket(serverPort)) {
+                while (!Thread.currentThread().isInterrupted()) {
+                    try {
+                        Socket clientSocket = serverSocket.accept();
+                        Node node = new Node(clientSocket);
+                        String nodeHash = String.valueOf(node.hashCode());
+                        nodes.put(nodeHash, node);
+                        networkPool.submit(node); // Assume Node implements Runnable
+                    } catch (IOException e) {
+                        e.printStackTrace(); // Handle as appropriate.
+                    }
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    public void connectToPeer(String address, int port) {
+        networkPool.submit(() -> {
+            try {
+                Socket socket = new Socket(address, port);
+                Node node = new Node(socket);
+                String nodeHash = String.valueOf(node.hashCode());
+                nodes.put(nodeHash, node);
+                networkPool.submit(node); // Assume Node implements Runnable
+            } catch (IOException e) {
+                e.printStackTrace(); // Handle as appropriate.
+            }
+        });
+    }
+
+    public void broadcastMessage(String message) {
+        // Broadcast message to all connected peers
+        nodes.values().forEach(node -> node.sendMessage(message));
     }
     public void getMyIpAddress(){
         try {
@@ -32,20 +71,6 @@ public class NetworkManager {
         } catch (SocketException e) {
             throw new RuntimeException(e);
         }
-    }
-    public void connectToPeer(String ip){
-        try {
-            Socket socket = new Socket(ip, 7777);
-            Node node = new Node(socket);
-            addNode(node);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    // Handle request based on the type
-    public void handleRequest(Message request) {
-        // Implementation based on request type
     }
 
     // Add node to the manager
@@ -63,16 +88,31 @@ public class NetworkManager {
             nodes.remove(ip);
         }
     }
+    /*
+        public void broadcastMessage(String message) {
+            Gson gson = new Gson();
+            String jsonMessage = gson.toJson(message);
 
-    public void broadcastMessage(String message) {
-        Gson gson = new Gson();
-        String jsonMessage = gson.toJson(message);
-
-        for (Node peer : nodes.values()) {
-            peer.sendMessage(jsonMessage);
+            for (Node peer : nodes.values()) {
+                peer.sendMessage(jsonMessage);
+            }
         }
-    }
 
+            public void connectToPeer(String ip){
+            try {
+                Socket socket = new Socket(ip, 7777);
+                Node node = new Node(socket);
+                addNode(node);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        // Handle request based on the type
+        public void handleRequest(Message request) {
+            // Implementation based on request type
+        }
+    */
     public Node getNode(String ip) {
         return nodes.get(ip);
     }
