@@ -1,6 +1,7 @@
 package blockchain;
 import java.security.*;
 import java.security.MessageDigest;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
 import java.util.Base64;
 import java.security.Signature;
@@ -96,6 +97,17 @@ public class StringUtil {
             return md.digest(data);
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException(e); // Handle exception appropriately
+        }
+    }
+
+    public static PublicKey getKeyFromString(String key) {
+        try {
+            byte[] keyBytes = Base64.getDecoder().decode(key);
+            X509EncodedKeySpec spec = new X509EncodedKeySpec(keyBytes);
+            KeyFactory keyFactory = KeyFactory.getInstance("ECDSA", "BC");
+            return keyFactory.generatePublic(spec);
+        } catch (Exception e) {
+            throw new RuntimeException("Error while converting string to public key", e);
         }
     }
 }

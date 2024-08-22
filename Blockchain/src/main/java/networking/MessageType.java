@@ -7,6 +7,8 @@ public enum MessageType {
     BLOCKCHAIN_RESPONSE, //for sending the blockchain
     SHARE_PEER_LIST, //for sharing the list of known peers
 
+    SYNC_REQUEST,  // New message type for requesting a full blockchain sync
+    SYNC_RESPONSE,  // New message type for responding with the blockchain
 
 
     PEER_DISCOVERY_RESPONSE, //for responding to peer discovery requests

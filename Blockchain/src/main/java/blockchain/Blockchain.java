@@ -1,15 +1,21 @@
 package blockchain;
 import com.google.gson.GsonBuilder;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-
 import static blockchain.Main.difficulty;
 
 public class Blockchain {
     private List<Block> chain;
     public static HashMap<String, TransactionOutput> UTXOs = new HashMap<>();
     private List<Transaction> unconfirmedTransactions;// A pool for unconfirmed transactions
+    private static final int CHECKPOINT_INTERVAL = 100;  // Save a checkpoint every 100 blocks
+    private int lastCheckpoint = 0;
+
     public Blockchain() {
         this.chain = new ArrayList<>();
         this.unconfirmedTransactions = new ArrayList<>();
@@ -19,7 +25,6 @@ public class Blockchain {
         chain.add(genesisBlock);
     }
 
-    // Mining a block
     private void mineBlock(Block block, int difficulty) {
         String target = StringUtil.getDifficultyString(difficulty); // Create a string with difficulty * "0"
         while (!block.getHash().substring(0, difficulty).equals(target)) {
@@ -28,8 +33,11 @@ public class Blockchain {
         }
     }
 
-    // Adding and validating a block
     public boolean addAndValidateBlock(Block block) {
+        if (block.getIndex() > lastCheckpoint + CHECKPOINT_INTERVAL) {
+            saveCheckpoint("checkpoint_" + block.getIndex() + ".dat");
+            lastCheckpoint = block.getIndex();
+        }
         Block lastBlock = chain.get(chain.size() - 1);
         if (block.getPreviousHash().equals(lastBlock.getHash()) && block.getIndex() == lastBlock.getIndex() + 1) {
             mineBlock(block, difficulty); // Mine the new block so it satisfies the difficulty level
@@ -40,6 +48,10 @@ public class Blockchain {
         return false;
     }
 
+    private void saveCheckpoint(String filename) {
+        saveBlockchain(filename);
+        System.out.println("Checkpoint saved at block " + lastCheckpoint);
+    }
 
 
     // Method to create a new block from unconfirmed transactions and add it to the chain
@@ -53,6 +65,30 @@ public class Blockchain {
             } else {
                 System.out.println("Failed to add new block to the blockchain");
             }
+        }
+    }
+
+    // Add this method to calculate the cumulative difficulty
+    public long calculateCumulativeDifficulty() {
+        long cumulativeDifficulty = 0;
+        for (Block block : chain) {
+            // Difficulty here refers to the number of leading zeros, so 2^difficulty gives us a rough measure of the work done
+            cumulativeDifficulty += Math.pow(2, difficulty);
+        }
+        return cumulativeDifficulty;
+    }
+
+    public void compareAndReplace(Blockchain newBlockchain) {
+        // Calculate the cumulative difficulty of both blockchains
+        long currentDifficulty = calculateCumulativeDifficulty();
+        long newDifficulty = newBlockchain.calculateCumulativeDifficulty();
+
+        // Replace if the new blockchain has a higher cumulative difficulty
+        if (newBlockchain.isValidChain() && newDifficulty > currentDifficulty) {
+            this.chain = new ArrayList<>(newBlockchain.chain);
+            System.out.println("Blockchain has been replaced with a more difficult valid chain.");
+        } else {
+            System.out.println("Received blockchain is invalid or does not have higher cumulative difficulty.");
         }
     }
 
@@ -77,8 +113,6 @@ public class Blockchain {
         }
     }
 
-
-
     // Method to create and add a new block with transactions from the pool
     public void addBlockFromPool() {
         // Assuming your Block constructor takes a list of transactions
@@ -96,18 +130,6 @@ public class Blockchain {
     // Assuming you have a method to get the last block in the chain
     private Block getLastBlock() {
         return chain.size() > 0 ? chain.get(chain.size() - 1) : null;
-    }
-
-
-    public void compareAndReplace(Blockchain newBlockchain) {
-        // Check the validity of the new blockchain
-        if (newBlockchain.isValidChain() && newBlockchain.chain.size() > this.chain.size()) {
-            // Replace the current chain with the new one
-            this.chain = new ArrayList<>(newBlockchain.chain);
-            System.out.println("Blockchain has been replaced with a longer valid chain.");
-        } else {
-            System.out.println("Received blockchain is invalid or not longer than the current blockchain.");
-        }
     }
 
     // Validate the integrity of the blockchain
@@ -177,10 +199,8 @@ public class Blockchain {
                     tempUTXOs.remove(input.transactionOutputId);
                 }
             }
-
             previousBlock = currentBlock;
         }
-
         System.out.println("Blockchain is valid.");
         return true;
     }
@@ -194,44 +214,26 @@ public class Blockchain {
     public Block getLatestBlock() {
         return chain.get(chain.size() - 1);
     }
-}
 
-/*
-    public void addBlock(Block newBlock) {
-        newBlock.mineBlock(difficulty);
-        chain.add(newBlock);
-        // Update UTXOs: Remove spent ones and add new ones
-        updateUTXOs(newBlock);
-
-        // Print the details of the newly added block
-        System.out.println("New Block Added:");
-        System.out.println("Index: " + newBlock.getIndex());
-        System.out.println("Timestamp: " + newBlock.getTimestamp());
-        System.out.println("Previous Hash: " + newBlock.getPreviousHash());
-        System.out.println("Hash: " + newBlock.getHash());
-        System.out.println("Transactions: " + newBlock.getTransactions().size());
-        System.out.println();
-    }
-* */
-/*
- public boolean isValidChain() {
-        Block currentBlock;
-        Block previousBlock;
-
-        for (int i = 1; i < chain.size(); i++) {
-            currentBlock = chain.get(i);
-            previousBlock = chain.get(i - 1);
-
-            if (!currentBlock.getHash().equals(currentBlock.calculateHash())) {
-                System.out.println("Current Block Hashes not equal");
-                return false;
-            }
-
-            if (!previousBlock.getHash().equals(currentBlock.getPreviousHash())) {
-                System.out.println("Previous Block Hashes not equal");
-                return false;
-            }
+    // Save the blockchain and UTXO set to a file
+    public void saveBlockchain(String filename) {
+        try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(filename))) {
+            out.writeObject(this.chain);
+            out.writeObject(Main.UTXOs);
+            System.out.println("Blockchain saved to disk.");
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-        return true;
     }
-* */
+
+    // Load the blockchain and UTXO set from a file
+    public void loadBlockchain(String filename) {
+        try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(filename))) {
+            this.chain = (List<Block>) in.readObject();
+            Main.UTXOs = (HashMap<String, TransactionOutput>) in.readObject();
+            System.out.println("Blockchain loaded from disk.");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}

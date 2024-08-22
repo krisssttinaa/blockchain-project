@@ -44,7 +44,6 @@ public class Transaction {
     }
 
     // Returns true if new transaction could be created
-    // Returns true if new transaction could be created
     public boolean processTransaction() {
         if (!verifySignature()) {
             System.out.println("#Transaction Signature failed to verify");

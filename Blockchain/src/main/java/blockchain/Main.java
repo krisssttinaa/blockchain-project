@@ -1,8 +1,8 @@
 package blockchain;
 import networking.NetworkManager;
-import networking.Node;
 import networking.Server;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
@@ -18,22 +18,33 @@ public class Main {
     public static List<Transaction> unconfirmedTransactions = new ArrayList<>();
     public static float minimumTransaction = 0; // Minimum transaction amount
     public static int difficulty = 6; // Difficulty level for mining.
+    private static final String BLOCKCHAIN_FILE = "blockchain.dat";
 
     public static void main(String[] args) {
         // Add Bouncy Castle as the security provider
         Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
-        NetworkManager networkManager = new NetworkManager();
         Blockchain myblockchain = new Blockchain();
 
+        // Load blockchain from disk if it exists
+        File file = new File(BLOCKCHAIN_FILE);
+        if (file.exists()) {
+            myblockchain.loadBlockchain(BLOCKCHAIN_FILE);
+        } else {
+            // Otherwise, start a new blockchain
+            myblockchain = new Blockchain();
+        }
+
         // Start server to accept incoming connections
-        int serverPort = 7777; // The port that the server will listen on
+        int serverPort = 7777;
+        NetworkManager networkManager = new NetworkManager(myblockchain, serverPort);
         try {
             Server server = new Server(serverPort, networkManager);
-            server.start(); // Start the server thread
+            server.start(); // Start the server in a separate thread
         } catch (IOException e) {
             System.err.println("Error starting server: " + e.getMessage());
             e.printStackTrace();
         }
+
         try {
             String currentIp = getCurrentIp();
             System.out.println("Current IP Address: " + currentIp);
@@ -60,16 +71,26 @@ public class Main {
 
         // Simulate transactions
         // Here you would simulate creating transactions, for example:
-        Transaction transaction = walletA.sendFunds(walletB.publicKey, 0); // Send 5 coins from walletA to walletB
+        Transaction transaction = walletA.sendFunds(walletB.publicKey, 0); // Send 0 coins from walletA to walletB
         if (transaction != null) {
             myblockchain.addTransaction(transaction); // Add transaction to the pool of unconfirmed transactions
         }
+
         // Attempt to mine a block and add it to the chain
         myblockchain.createAndAddBlock();
+
         // Print the current state of the blockchain
         myblockchain.printChain();
+
         // Verify the integrity of the blockchain
         System.out.println("Blockchain is valid: " + myblockchain.isValidChain());
+
+        // Start the CLI for user interaction
+        BlockchainCLI cli = new BlockchainCLI(myblockchain);
+        cli.start();
+
+        // Save blockchain to disk before exit
+        myblockchain.saveBlockchain(BLOCKCHAIN_FILE);
     }
 
     public static String getCurrentIp() throws SocketException {
@@ -86,6 +107,7 @@ public class Main {
         }
         return null; //throw an exception
     }
+
     public static void printUTXOs() {
         System.out.println("Current UTXOs:");
         for (String id : UTXOs.keySet()) {
@@ -94,29 +116,4 @@ public class Main {
             System.out.println();
         }
     }
-
 }
-
-/*
-    public static void main(String[] args) {
-        Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
-
-        Blockchain blockchain = new Blockchain(); // Initialize the blockchain with the genesis block
-        Wallet walletA = new Wallet(); // Create a wallet for testing
-        //Wallet recipientWallet = new Wallet(); // Simulate a recipient wallet
-        while (true) {
-            // Simulate creating a transaction from walletA to a new recipient
-            Wallet recipientWallet = new Wallet(); // Simulate a recipient wallet
-            Transaction newTransaction = walletA.sendFunds(recipientWallet.publicKey, 0); // Adjust value as needed
-
-            if (newTransaction != null) {
-                Block newBlock = new Block(blockchain.getLatestBlock().getIndex() + 1, blockchain.getLatestBlock().getHash());
-                newBlock.addTransaction(newTransaction);
-                blockchain.addBlock(newBlock);
-            }
-            // Print the blockchain status
-            //blockchain.printChain();
-            printUTXOs();
-        }
-    }
-* */

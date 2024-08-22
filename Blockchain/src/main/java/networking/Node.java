@@ -1,17 +1,21 @@
 package networking;
-
+import blockchain.Blockchain;
 import com.google.gson.Gson;
+import networking.Message;
+import networking.MessageType;
 
 import java.io.*;
 import java.net.Socket;
 
 public class Node implements Runnable {
     private final Socket socket;
+    private final Blockchain blockchain; // Add this field to store the blockchain instance
     private BufferedReader input;
     private PrintWriter output;
 
-    public Node (Socket socket) {
+    public Node(Socket socket, Blockchain blockchain) { // Update constructor to accept a Blockchain instance
         this.socket = socket;
+        this.blockchain = blockchain; // Initialize the blockchain field
         try {
             this.input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             this.output = new PrintWriter(socket.getOutputStream(), true);
@@ -42,8 +46,20 @@ public class Node implements Runnable {
             case NEW_BLOCK:
                 // Handle new block
                 break;
-            case PEER_DISCOVERY_REQUEST:
-                // Respond with known peers
+            case BLOCKCHAIN_REQUEST:
+                // Respond with the current blockchain
+                String blockchainJson = gson.toJson(blockchain); // Use blockchain instance
+                sendMessage(new Message(MessageType.BLOCKCHAIN_RESPONSE, blockchainJson));
+                break;
+            case SYNC_REQUEST:
+                // Respond with the full blockchain for synchronization
+                String syncBlockchainJson = gson.toJson(blockchain); // Use blockchain instance
+                sendMessage(new Message(MessageType.SYNC_RESPONSE, syncBlockchainJson));
+                break;
+            case SYNC_RESPONSE:
+                // Handle sync response by comparing and replacing the blockchain if needed
+                Blockchain receivedBlockchain = gson.fromJson(receivedMsg.getData(), Blockchain.class);
+                blockchain.compareAndReplace(receivedBlockchain); // Use blockchain instance
                 break;
             default:
                 System.out.println("Unknown message type received");
@@ -53,16 +69,12 @@ public class Node implements Runnable {
     public String getIp() {
         return socket.getInetAddress().getHostAddress();
     }
-/*
-    public void sendMessage(String message) {
-            output.write(message); // Write the message to the output stream of the socket connection to the peer node
-            output.flush(); // Flush the output stream to send the message immediately to the peer node
-    }*/
 
-    public void sendMessage(String message) {
-        output.println(message);
+    public void sendMessage(Message message) {
+        Gson gson = new Gson();
+        String messageJson = gson.toJson(message);
+        output.println(messageJson);
     }
-
 
     public void closeConnection() {
         try {
@@ -70,19 +82,5 @@ public class Node implements Runnable {
         } catch (IOException e) {
             e.printStackTrace();
         }
-    }
-
-    // Request the latest block from the connected peer
-    public void requestLatestBlock() {
-        sendMessage("latest block request");
-    }
-
-    // Sync blockchain logic here
-    public void syncBlockchain() {
-        sendMessage("sync request");
-    }
-
-    public Socket getSocket() {
-        return socket;
     }
 }

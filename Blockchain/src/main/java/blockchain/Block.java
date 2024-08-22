@@ -7,11 +7,10 @@ public class Block {
     private final int index;
     private final String previousHash;
     private final long timestamp;
-    private final List<Transaction> transactions; // Change from String data to a list of Transactions
+    private final List<Transaction> transactions;
     private String hash;
     private int nonce;
 
-    // Existing constructor
     public Block(int index, String previousHash) {
         this(index, previousHash, new ArrayList<>()); // Call the overloaded constructor with an empty list
     }
@@ -41,7 +40,6 @@ public class Block {
 
     // Method to add a transaction to this block
     public boolean addTransaction(Transaction transaction) {
-        // Check if the transaction is null
         if(transaction == null) return false;
 
         // If we're not adding the genesis block, process the transaction
@@ -75,15 +73,3 @@ public class Block {
     public List<Transaction> getTransactions() {return transactions;}
     public int getNonce() {return nonce;}
 }
-
-/*
-    public void mineBlock(int difficulty) {
-        String target = StringUtil.getDifficultyString(difficulty);
-        while (!hash.substring(0, difficulty).equals(target)) {
-            nonce++;
-            hash = calculateHash();
-        }
-        //System.out.println("Block Mined: " + hash);
-    }
-*
-* */

@@ -14,7 +14,7 @@ public class Server extends Thread{
             try {
                 Socket clientSocket = serverSocket.accept();
                 //create new Node passing the socket in constructor//networkManager.addNode(new Node(clientSocket));
-                networkManager.addNode(new Node(clientSocket));
+                //networkManager.addNode(new Node(clientSocket));
                 System.out.println("New connection from " + clientSocket.getInetAddress().getHostAddress());
             } catch (IOException e) {
                 e.printStackTrace();
