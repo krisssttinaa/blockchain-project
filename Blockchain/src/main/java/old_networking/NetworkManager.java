@@ -1,4 +1,4 @@
-package old_networking;
+/*package old_networking;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -61,3 +61,4 @@ public class NetworkManager {
         peers.values().parallelStream().forEach(peer -> peer.send(message));
     }
 }
+*/

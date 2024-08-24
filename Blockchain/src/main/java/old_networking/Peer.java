@@ -1,4 +1,4 @@
-package old_networking;
+/*package old_networking;
 
 import java.io.*;
 import java.net.Socket;
@@ -44,4 +44,4 @@ public class Peer implements Runnable {
             System.err.println("Connection closed by remote host");
         }
     }
-}
+}*/

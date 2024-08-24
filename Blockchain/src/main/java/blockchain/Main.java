@@ -1,9 +1,7 @@
 package blockchain;
-import networking.NetworkManager;
-import networking.Server;
 
+import networking.NetworkManager;
 import java.io.File;
-import java.io.IOException;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
@@ -14,86 +12,54 @@ import java.util.HashMap;
 import java.util.List;
 
 public class Main {
-    public static HashMap<String, TransactionOutput> UTXOs = new HashMap<>(); // List of all unspent transactions.
+    public static HashMap<String, TransactionOutput> UTXOs = new HashMap<>();
     public static List<Transaction> unconfirmedTransactions = new ArrayList<>();
-    public static float minimumTransaction = 0; // Minimum transaction amount
-    public static int difficulty = 6; // Difficulty level for mining.
+    public static float minimumTransaction = 0.1f;
+    public static int difficulty = 5;
     private static final String BLOCKCHAIN_FILE = "blockchain.dat";
+    private static final String SEED_NODE_ADDRESS = "172.17.0.2";
 
     public static void main(String[] args) {
-        // Add Bouncy Castle as the security provider
+        System.out.println("Starting blockchain node...");
         Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
-        Blockchain myblockchain = new Blockchain();
+
+        Blockchain blockchain = new Blockchain();
+        Wallet senderWallet = new Wallet();
+        NetworkManager networkManager = new NetworkManager(blockchain, 7777, senderWallet.publicKey);
 
         // Load blockchain from disk if it exists
         File file = new File(BLOCKCHAIN_FILE);
         if (file.exists()) {
-            myblockchain.loadBlockchain(BLOCKCHAIN_FILE);
-        } else {
-            // Otherwise, start a new blockchain
-            myblockchain = new Blockchain();
-        }
-
-        // Start server to accept incoming connections
-        int serverPort = 7777;
-        NetworkManager networkManager = new NetworkManager(myblockchain, serverPort);
-        try {
-            Server server = new Server(serverPort, networkManager);
-            server.start(); // Start the server in a separate thread
-        } catch (IOException e) {
-            System.err.println("Error starting server: " + e.getMessage());
-            e.printStackTrace();
+            blockchain.loadBlockchain(BLOCKCHAIN_FILE);
+            System.out.println("Blockchain loaded from disk.");
         }
 
         try {
             String currentIp = getCurrentIp();
             System.out.println("Current IP Address: " + currentIp);
 
-            if (!"172.17.0.2".equals(currentIp)) {
-                // This is not the first container, connect to the first container and start discovering peers
-                String peerAddress = "172.17.0.2"; // The known address of the first container
-                //networkManager.connectToPeer("172.17.0.2");
-                //node.connectToPeer(peerAddress);
-                // Start peer discovery
-                //node.startPeerDiscovery("172.17.0.2");
+            if (SEED_NODE_ADDRESS.equals(currentIp)) {
+                System.out.println("This node is the seed node.");
+                networkManager.startServer();
+            } else {
+                System.out.println("Connecting to seed node at " + SEED_NODE_ADDRESS);
+                networkManager.connectToPeer(SEED_NODE_ADDRESS, 7777);
+                System.out.println("Connected to seed node.");
             }
         } catch (SocketException e) {
-            e.printStackTrace();
+            System.err.println("Error determining IP address: " + e.getMessage());
         }
 
-        // Create wallets
-        Wallet walletA = new Wallet();
-        Wallet walletB = new Wallet();
-
-        // Print wallet details for debugging
-        System.out.println("Wallet A's public key: " + StringUtil.getStringFromKey(walletA.publicKey));
-        System.out.println("Wallet B's public key: " + StringUtil.getStringFromKey(walletB.publicKey));
-
-        // Simulate transactions
-        // Here you would simulate creating transactions, for example:
-        Transaction transaction = walletA.sendFunds(walletB.publicKey, 0); // Send 0 coins from walletA to walletB
-        if (transaction != null) {
-            myblockchain.addTransaction(transaction); // Add transaction to the pool of unconfirmed transactions
-        }
-
-        // Attempt to mine a block and add it to the chain
-        myblockchain.createAndAddBlock();
-
-        // Print the current state of the blockchain
-        myblockchain.printChain();
-
-        // Verify the integrity of the blockchain
-        System.out.println("Blockchain is valid: " + myblockchain.isValidChain());
-
-        // Start the CLI for user interaction
-        BlockchainCLI cli = new BlockchainCLI(myblockchain);
+        // Start CLI for user interaction
+        BlockchainCLI cli = new BlockchainCLI(blockchain, senderWallet, networkManager);
         cli.start();
 
         // Save blockchain to disk before exit
-        myblockchain.saveBlockchain(BLOCKCHAIN_FILE);
+        blockchain.saveBlockchain(BLOCKCHAIN_FILE);
+        System.out.println("Blockchain saved to disk.");
     }
 
-    public static String getCurrentIp() throws SocketException {
+    private static String getCurrentIp() throws SocketException {
         Enumeration<NetworkInterface> networkInterfaces = NetworkInterface.getNetworkInterfaces();
         while (networkInterfaces.hasMoreElements()) {
             NetworkInterface networkInterface = networkInterfaces.nextElement();
@@ -105,7 +71,7 @@ public class Main {
                 }
             }
         }
-        return null; //throw an exception
+        return null;
     }
 
     public static void printUTXOs() {
@@ -113,7 +79,6 @@ public class Main {
         for (String id : UTXOs.keySet()) {
             TransactionOutput utxo = UTXOs.get(id);
             System.out.println("UTXO ID: " + id + ", Amount: " + utxo.value + ", Owner: " + StringUtil.getStringFromKey(utxo.recipient));
-            System.out.println();
         }
     }
 }

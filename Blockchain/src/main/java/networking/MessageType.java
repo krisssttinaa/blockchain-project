@@ -10,7 +10,6 @@ public enum MessageType {
     SYNC_REQUEST,  // New message type for requesting a full blockchain sync
     SYNC_RESPONSE,  // New message type for responding with the blockchain
 
-
     PEER_DISCOVERY_RESPONSE, //for responding to peer discovery requests
     PEER_DISCOVERY_REQUEST, //for requesting peer discovery
     PEER_DISCOVERY_ACK, //for acknowledging peer discovery

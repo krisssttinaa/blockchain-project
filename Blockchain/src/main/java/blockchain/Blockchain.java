@@ -19,18 +19,19 @@ public class Blockchain {
     public Blockchain() {
         this.chain = new ArrayList<>();
         this.unconfirmedTransactions = new ArrayList<>();
-        // Create and add the genesis block
         Block genesisBlock = new Block(0, "0");
-        mineBlock(genesisBlock, difficulty);
         chain.add(genesisBlock);
     }
 
     private void mineBlock(Block block, int difficulty) {
         String target = StringUtil.getDifficultyString(difficulty); // Create a string with difficulty * "0"
+        //System.out.println("we are here");
         while (!block.getHash().substring(0, difficulty).equals(target)) {
+
             block.incrementNonce(); // Increase nonce to change the hash
             block.updateHash(); // Recalculate hash with the new nonce
         }
+        //System.out.println("we are here1");
     }
 
     public boolean addAndValidateBlock(Block block) {
@@ -214,6 +215,8 @@ public class Blockchain {
     public Block getLatestBlock() {
         return chain.get(chain.size() - 1);
     }
+
+
 
     // Save the blockchain and UTXO set to a file
     public void saveBlockchain(String filename) {

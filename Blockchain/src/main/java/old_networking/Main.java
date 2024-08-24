@@ -1,4 +1,4 @@
-package old_networking;
+/*package old_networking;
 
 public class Main {
     public static void main(String[] args) {
@@ -7,4 +7,4 @@ public class Main {
 
     }
 
-}
+}*/
