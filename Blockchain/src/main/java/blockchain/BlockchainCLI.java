@@ -57,6 +57,7 @@ public class BlockchainCLI {
             return;
         }
 
+        // User selects a peer to send the transaction to
         System.out.println("Choose a recipient:");
         int i = 1;
         for (Map.Entry<String, PeerInfo> entry : peers.entrySet()) {
@@ -83,10 +84,13 @@ public class BlockchainCLI {
         try {
             Transaction transaction = senderWallet.sendFunds(recipient, amount);
             if (transaction != null) {
+                System.out.println("Transaction created and broadcasted.");
+
+                // Propagate the transaction immediately
+                networkManager.broadcastMessage(new Message(MessageType.NEW_TRANSACTION, new Gson().toJson(transaction)));
+
+                // Optionally: add the transaction to the local pool for mining later
                 blockchain.addTransaction(transaction);
-                blockchain.createAndAddBlock();
-                System.out.println("Transaction sent and block added.");
-                networkManager.broadcastMessage(new Message(MessageType.NEW_TRANSACTION, new Gson().toJson(transaction))); // Broadcast the new transaction
             } else {
                 System.out.println("Transaction failed.");
             }

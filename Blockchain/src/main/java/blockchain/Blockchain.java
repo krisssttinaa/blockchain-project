@@ -1,5 +1,7 @@
 package blockchain;
+
 import com.google.gson.GsonBuilder;
+
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.ObjectInputStream;
@@ -7,12 +9,13 @@ import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+
 import static blockchain.Main.difficulty;
 
 public class Blockchain {
     private List<Block> chain;
     public static HashMap<String, TransactionOutput> UTXOs = new HashMap<>();
-    private List<Transaction> unconfirmedTransactions;// A pool for unconfirmed transactions
+    private List<Transaction> unconfirmedTransactions; // A pool for unconfirmed transactions
     private static final int CHECKPOINT_INTERVAL = 100;  // Save a checkpoint every 100 blocks
     private int lastCheckpoint = 0;
 
@@ -25,13 +28,10 @@ public class Blockchain {
 
     private void mineBlock(Block block, int difficulty) {
         String target = StringUtil.getDifficultyString(difficulty); // Create a string with difficulty * "0"
-        //System.out.println("we are here");
         while (!block.getHash().substring(0, difficulty).equals(target)) {
-
             block.incrementNonce(); // Increase nonce to change the hash
             block.updateHash(); // Recalculate hash with the new nonce
         }
-        //System.out.println("we are here1");
     }
 
     public boolean addAndValidateBlock(Block block) {
@@ -53,7 +53,6 @@ public class Blockchain {
         saveBlockchain(filename);
         System.out.println("Checkpoint saved at block " + lastCheckpoint);
     }
-
 
     // Method to create a new block from unconfirmed transactions and add it to the chain
     public void createAndAddBlock() {
@@ -104,7 +103,7 @@ public class Blockchain {
 
     // Method to add a transaction to the pool of unconfirmed transactions
     public boolean addTransaction(Transaction transaction) {
-        if (transaction.processTransaction() &&  transaction.getInputsValue() >= Main.minimumTransaction) {
+        if (transaction.processTransaction() && transaction.getInputsValue() >= Main.minimumTransaction) {
             unconfirmedTransactions.add(transaction);
             System.out.println("Transaction successfully added to the pool.");
             return true;
@@ -215,8 +214,6 @@ public class Blockchain {
     public Block getLatestBlock() {
         return chain.get(chain.size() - 1);
     }
-
-
 
     // Save the blockchain and UTXO set to a file
     public void saveBlockchain(String filename) {

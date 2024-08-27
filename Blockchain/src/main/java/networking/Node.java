@@ -12,9 +12,7 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.security.PublicKey;
-import java.util.LinkedList;
-import java.util.Map;
-import java.util.Queue;
+import java.security.SecureRandom;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class Node implements Runnable {
@@ -23,23 +21,28 @@ public class Node implements Runnable {
     private final NetworkManager networkManager;
     private BufferedReader input;
     private PrintWriter output;
-
-    // Queue to buffer messages
-    private final Queue<Message> messageQueue = new LinkedList<>();
-    private boolean keyExchangeComplete = false; // Track key exchange state
     private final Gson gson = new Gson();
+    private String localNonce;
+    private String local;
+    private String peerNonce;
     private PublicKey peerPublicKey;
+    private boolean handshakeComplete = false;
+    private final boolean isSeedNode;
 
-    public Node(Socket socket, Blockchain blockchain, NetworkManager networkManager) {
+    public Node(Socket socket, Blockchain blockchain, NetworkManager networkManager, boolean isSeedNode) {
         this.socket = socket;
         this.blockchain = blockchain;
         this.networkManager = networkManager;
+        this.isSeedNode = isSeedNode;
+
         try {
             this.input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             this.output = new PrintWriter(socket.getOutputStream(), true);
 
-            // Immediately send public key upon establishing connection
-            sendPublicKey();
+            // Only initiate handshake if this node is connecting to the seed node
+            if (isSeedNode) {
+                initiateHandshake();
+            }
 
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -52,96 +55,139 @@ public class Node implements Runnable {
             String receivedMessage;
             while ((receivedMessage = input.readLine()) != null) {
                 Message receivedMsg = gson.fromJson(receivedMessage, Message.class);
-
-                // Always handle the key exchange message first
-                if (!keyExchangeComplete && receivedMsg.getType() == MessageType.PUBLIC_KEY_EXCHANGE) {
-                    handlePublicKeyExchange(receivedMsg);
-                    keyExchangeComplete = true; // Set the flag to true after successful key exchange
-                    processMessageQueue(); // Now that the key exchange is complete, process the queue
-                } else {
-                    // If not yet completed, buffer the messages
-                    if (!keyExchangeComplete) {
-                        addMessageToQueueIfUnique(receivedMsg);
-                    } else {
-                        // Process immediately if key exchange is done
-                        processMessage(receivedMsg);
-                    }
-                }
+                processMessage(receivedMsg); // Handle both handshake and general messages
             }
         } catch (IOException e) {
             System.err.println("Failed to read message: " + e.getMessage());
         }
     }
 
-    // Method to send the local public key immediately upon connection
-    private void sendPublicKey() {
+    private void initiateHandshake() {
+        // Generate a nonce for this session
+        localNonce = generateNonce();
         String publicKeyString = StringUtil.getStringFromKey(networkManager.getLocalPublicKey());
-        Message publicKeyMessage = new Message(MessageType.PUBLIC_KEY_EXCHANGE, publicKeyString);
-        sendMessage(publicKeyMessage);
-        System.out.println("Sent Public Key: " + publicKeyString);
+
+        // Send handshake initiation with local nonce
+        HandshakeMessage handshakeInit = new HandshakeMessage(publicKeyString, localNonce);
+        sendMessage(new Message(MessageType.HANDSHAKE_INIT, gson.toJson(handshakeInit)));
+        System.out.println("Handshake initiation sent with nonce: " + localNonce);
     }
 
-    // Method to handle public key exchange
-    private void handlePublicKeyExchange(Message receivedMsg) {
-        String receivedKey = receivedMsg.getData();
-        System.out.println("Public key exchange message received: " + receivedKey);
-
-        // Convert the received public key string to a PublicKey object
-        peerPublicKey = StringUtil.getKeyFromString(receivedKey);
-
-        // Store the connected peer's information
-        String peerIp = socket.getInetAddress().getHostAddress();
-        networkManager.getPeers().put(receivedKey, new PeerInfo(peerIp));
-
-        // Send a peer discovery request to the newly connected peer
-        sendMessage(new Message(MessageType.PEER_DISCOVERY_REQUEST, ""));
-    }
-
-    // Method to check for duplicates before adding to the queue
-    private void addMessageToQueueIfUnique(Message message) {
-        boolean isDuplicate = messageQueue.stream().anyMatch(
-                queuedMessage -> queuedMessage.getType() == message.getType() &&
-                        queuedMessage.getData().equals(message.getData())
-        );
-
-        if (!isDuplicate) {
-            messageQueue.offer(message);
+    private void processMessage(Message message) {
+        if (!handshakeComplete) {
+            // Handle handshake messages
+            switch (message.getType()) {
+                case HANDSHAKE_INIT -> handleHandshakeInit(message);
+                case HANDSHAKE_RESPONSE -> handleHandshakeResponse(message);
+                case HANDSHAKE_FINAL -> handleHandshakeFinal(message);
+                default -> System.out.println("Unexpected message type during handshake: " + message.getType());
+            }
         } else {
-            System.out.println("Duplicate message detected, not adding to queue: " + message);
+            // If handshake is complete, process other types of messages
+            handleNetworkMessage(message);
         }
     }
 
-    private void processMessageQueue() {
-        while (!messageQueue.isEmpty()) {
-            Message message = messageQueue.poll(); // Get the next message in the queue
-            processMessage(message); // Process the message
-        }
+    private void handleHandshakeInit(Message message) {
+        HandshakeMessage handshakeMessage = gson.fromJson(message.getData(), HandshakeMessage.class);
+        String receivedNonce = handshakeMessage.getNonce();
+        String incomingPublicKeyString = handshakeMessage.getPublicKey();
+
+        System.out.println("Received handshake init with nonce: " + receivedNonce);
+
+        // Compare the nonces to decide who proceeds
+
+            local = generateNonce(); // Generate a new nonce if not already set
+            HandshakeMessage handshakeResponse = new HandshakeMessage(StringUtil.getStringFromKey(networkManager.getLocalPublicKey()), receivedNonce, local);
+            sendMessage(new Message(MessageType.HANDSHAKE_RESPONSE, gson.toJson(handshakeResponse)));
+            System.out.println("Handshake response sent with peer's nonce: " + receivedNonce+" and new nonce: " + local);
+        // Store peer's public key and nonce
+        peerPublicKey = StringUtil.getKeyFromString(incomingPublicKeyString);
+        peerNonce = receivedNonce;
     }
 
-    private void processMessage(Message receivedMsg) {
-        switch (receivedMsg.getType()) {
-            case NEW_TRANSACTION -> handleNewTransaction(receivedMsg);
-            case NEW_BLOCK -> handleNewBlock(receivedMsg);
+    private void handleHandshakeResponse(Message message) {
+        HandshakeMessage handshakeMessage = gson.fromJson(message.getData(), HandshakeMessage.class);
+        String receivedNonce = handshakeMessage.getNonce();
+        String receivedPeerNonce = handshakeMessage.getNewNonce();
+
+        System.out.println("Received handshake response with nonce: " + receivedNonce + ", expected: " + localNonce);
+
+        // Verify the nonce
+        if (!receivedNonce.equals(localNonce)) {
+            System.out.println("Nonce verification failed. Handshake aborted.");
+            return;
+        }
+
+        // Finalize the handshake
+        peerNonce = receivedPeerNonce;
+        HandshakeMessage handshakeFinal = new HandshakeMessage(peerNonce);
+        sendMessage(new Message(MessageType.HANDSHAKE_FINAL, gson.toJson(handshakeFinal)));
+        System.out.println("Final handshake message sent. Handshake complete.");
+        handshakeComplete = true;
+
+        // Proceed to broadcast the peer list after successful handshake
+        broadcastUpdatedPeerList();
+    }
+
+    private void handleHandshakeFinal(Message message) {
+        HandshakeMessage handshakeMessage = gson.fromJson(message.getData(), HandshakeMessage.class);
+        String receivedNonce = handshakeMessage.getNonce();
+
+        System.out.println("Received final handshake with nonce: " + receivedNonce + ", expected: " + local);
+
+        // Verify the nonce
+        if (!receivedNonce.equals(local)) {
+            System.out.println("Final nonce verification failed. Handshake aborted.");
+            return;
+        }
+
+        System.out.println("Final nonce verified. Handshake complete.");
+        handshakeComplete = true;
+
+        // Proceed to broadcast the peer list after successful handshake
+        broadcastUpdatedPeerList();
+    }
+
+    private void handleNetworkMessage(Message message) {
+        switch (message.getType()) {
+            case NEW_TRANSACTION -> handleNewTransaction(message);
+            case NEW_BLOCK -> handleNewBlock(message);
             case BLOCKCHAIN_REQUEST -> handleBlockchainRequest();
             case SYNC_REQUEST -> handleSyncRequest();
-            case SYNC_RESPONSE -> handleSyncResponse(receivedMsg);
+            case SYNC_RESPONSE -> handleSyncResponse(message);
             case PEER_DISCOVERY_REQUEST -> handlePeerDiscoveryRequest();
-            case PEER_DISCOVERY_RESPONSE -> handlePeerDiscoveryResponse(receivedMsg);
-            default -> System.out.println("Unknown message type received: " + receivedMsg.getType());
+            case PEER_DISCOVERY_RESPONSE -> handlePeerDiscoveryResponse(message);
+            default -> System.out.println("Unknown message type received: " + message.getType());
         }
     }
 
     private void handleNewTransaction(Message receivedMsg) {
         Transaction transaction = gson.fromJson(receivedMsg.getData(), Transaction.class);
         if (blockchain.addTransaction(transaction)) {
+            System.out.println("Transaction added to local pool and re-broadcasted.");
+            // Propagate the transaction further to other peers
             networkManager.broadcastMessage(new Message(MessageType.NEW_TRANSACTION, gson.toJson(transaction)));
+
+            // Trigger block mining if the transaction was successfully added
+            System.out.println("Mining new block with the received transaction...");
+            blockchain.createAndAddBlock();
+
+            // After mining, broadcast the new block
+            Block latestBlock = blockchain.getLatestBlock();
+            networkManager.broadcastMessage(new Message(MessageType.NEW_BLOCK, gson.toJson(latestBlock)));
+        } else {
+            System.out.println("Transaction failed validation and was not added.");
         }
     }
 
     private void handleNewBlock(Message receivedMsg) {
         Block block = gson.fromJson(receivedMsg.getData(), Block.class);
         if (blockchain.addAndValidateBlock(block)) {
+            System.out.println("Block validated and added to the chain, broadcasting...");
             networkManager.broadcastMessage(new Message(MessageType.NEW_BLOCK, gson.toJson(block)));
+        } else {
+            System.out.println("Block validation failed.");
         }
     }
 
@@ -166,36 +212,36 @@ public class Node implements Runnable {
     }
 
     private void handlePeerDiscoveryResponse(Message receivedMsg) {
-        Map<String, PeerInfo> receivedPeers = gson.fromJson(receivedMsg.getData(), ConcurrentHashMap.class); // Deserialize the peers map
+        ConcurrentHashMap<String, PeerInfo> receivedPeers = gson.fromJson(receivedMsg.getData(), ConcurrentHashMap.class); // Deserialize the peers map
         receivedPeers.forEach((publicKey, peerInfo) -> {
             networkManager.getPeers().putIfAbsent(publicKey, peerInfo); // Add any new peers to our list
         });
     }
 
-    public String getIp() {
-        return socket.getInetAddress().getHostAddress();
+    private void broadcastUpdatedPeerList() {
+        System.out.println("Broadcasting updated peer list...");
+        String peersJson = gson.toJson(networkManager.getPeers());
+        networkManager.broadcastMessage(new Message(MessageType.PEER_DISCOVERY_RESPONSE, peersJson));
     }
 
-    public void sendMessage(Message message) {
+    private String generateNonce() {
+        SecureRandom random = new SecureRandom();
+        byte[] nonceBytes = new byte[8];
+        random.nextBytes(nonceBytes);
+        StringBuilder nonceBuilder = new StringBuilder();
+        for (byte b : nonceBytes) {
+            nonceBuilder.append(String.format("%02x", b));
+        }
+        return nonceBuilder.toString();
+    }
+
+    private void sendMessage(Message message) {
         String messageJson = gson.toJson(message);
         output.println(messageJson);
     }
 
-    public void closeConnection() {
-        try {
-            socket.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    // Method to request the blockchain from a connected peer
-    public void requestBlockchain() {
-        sendMessage(new Message(MessageType.BLOCKCHAIN_REQUEST, ""));
-    }
-
-    // Method to request a full blockchain for synchronization
-    public void requestSync() {
-        sendMessage(new Message(MessageType.SYNC_REQUEST, ""));
+    private void storePeerInfo(String incomingPublicKeyString) {
+        String peerIp = socket.getInetAddress().getHostAddress();
+        networkManager.getPeers().putIfAbsent(incomingPublicKeyString, new PeerInfo(peerIp));
     }
 }
