@@ -1,12 +1,9 @@
-FROM openjdk:21-jdk
+FROM openjdk:21-jdk-slim
 
 WORKDIR /app
 
-# Create directory if it doesn't exist
-RUN mkdir -p /app
+# Copy the unshaded JAR file into the Docker container
+COPY target/Blockchain-1.0-SNAPSHOT.jar /app/Blockchain.jar
 
-# Copy the JAR file into the container
-COPY out/artifacts/Blockchain_jar/Blockchain.jar /app/Blockchain.jar
-
-# Set the entry point to run the JAR file
-CMD ["java", "-jar", "/app/Blockchain.jar"]
+# Command to run your application
+ENTRYPOINT ["java", "-jar", "/app/Blockchain.jar"]

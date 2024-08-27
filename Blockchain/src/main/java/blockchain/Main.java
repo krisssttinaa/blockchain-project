@@ -2,6 +2,7 @@ package blockchain;
 
 import networking.NetworkManager;
 import java.io.File;
+import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
@@ -14,12 +15,13 @@ import java.util.List;
 public class Main {
     public static HashMap<String, TransactionOutput> UTXOs = new HashMap<>();
     public static List<Transaction> unconfirmedTransactions = new ArrayList<>();
-    public static float minimumTransaction = 0.1f;
+    public static float minimumTransaction = 0;
     public static int difficulty = 5;
     private static final String BLOCKCHAIN_FILE = "blockchain.dat";
-    private static final String SEED_NODE_ADDRESS = "172.17.0.2";
+    private static final String SEED_NODE_ADDRESS = "172.18.0.2";
 
     public static void main(String[] args) {
+
         System.out.println("Starting blockchain node...");
         Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
 
@@ -63,10 +65,12 @@ public class Main {
         Enumeration<NetworkInterface> networkInterfaces = NetworkInterface.getNetworkInterfaces();
         while (networkInterfaces.hasMoreElements()) {
             NetworkInterface networkInterface = networkInterfaces.nextElement();
+
             Enumeration<InetAddress> inetAddresses = networkInterface.getInetAddresses();
             while (inetAddresses.hasMoreElements()) {
                 InetAddress inetAddress = inetAddresses.nextElement();
-                if (inetAddress.isSiteLocalAddress()) {
+                if (inetAddress instanceof Inet4Address && !inetAddress.isLoopbackAddress() && !inetAddress.isLinkLocalAddress()) {
+                    System.out.println("Selected IPv4 Address: " + inetAddress.getHostAddress() + " on interface " + networkInterface.getName());
                     return inetAddress.getHostAddress();
                 }
             }

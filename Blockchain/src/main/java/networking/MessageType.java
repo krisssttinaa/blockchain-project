@@ -12,6 +12,7 @@ public enum MessageType {
 
     PEER_DISCOVERY_RESPONSE, //for responding to peer discovery requests
     PEER_DISCOVERY_REQUEST, //for requesting peer discovery
+    PUBLIC_KEY_EXCHANGE, //for exchanging public keys
     PEER_DISCOVERY_ACK, //for acknowledging peer discovery
     TRANSACTION_CONFIRMATION //for acknowledging receipt of transactions
 }

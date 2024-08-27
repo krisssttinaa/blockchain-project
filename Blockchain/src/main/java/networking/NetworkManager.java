@@ -61,8 +61,8 @@ public class NetworkManager {
                 System.out.println("Successfully connected to peer: " + address);
 
                 // After connecting, request the peer list from the new peer
-                String peerIp = socket.getInetAddress().getHostAddress(); // Extract the IP address from the Socket
-                sendMessageToPeer(peerIp, new Message(MessageType.PEER_DISCOVERY_REQUEST, ""));
+                //String peerIp = socket.getInetAddress().getHostAddress(); // Extract the IP address from the Socket
+                //sendMessageToPeer(peerIp, new Message(MessageType.PEER_DISCOVERY_REQUEST, ""));
             } catch (IOException e) {
                 System.err.println("Failed to connect to peer: " + address + ". Error: " + e.getMessage());
             }
@@ -72,21 +72,27 @@ public class NetworkManager {
     // Handles a new connection from a peer
     private void handleNewConnection(Socket socket) {
         try {
-            // Exchange public keys with the connected peer
             PublicKey peerPublicKey = exchangePublicKeys(socket);
+            if (peerPublicKey == null) {
+                System.err.println("Failed to exchange public keys.");
+                return;
+            }
+
             String peerIp = socket.getInetAddress().getHostAddress();
-
-            // Store or update the peer's public key and IP address
-            peers.put(StringUtil.getStringFromKey(peerPublicKey), new PeerInfo(peerIp));
             System.out.println("Connected to peer with IP: " + peerIp + " and Public Key: " + StringUtil.getStringFromKey(peerPublicKey));
+            peers.put(StringUtil.getStringFromKey(peerPublicKey), new PeerInfo(peerIp));
 
-            // Listen for messages from the peer
+            // Now it's safe to start normal communication
             listenForMessages(socket, peerPublicKey);
+
+            // Now send the PEER_DISCOVERY_REQUEST message after the key exchange is completed
+            sendMessageToPeer(peerIp, new Message(MessageType.PEER_DISCOVERY_REQUEST, ""));
 
         } catch (Exception e) {
             System.err.println("Failed to handle new connection: " + e.getMessage());
         }
     }
+
 
     // Exchanges public keys with the connected peer
     private PublicKey exchangePublicKeys(Socket socket) {
@@ -94,14 +100,26 @@ public class NetworkManager {
             PrintWriter output = new PrintWriter(socket.getOutputStream(), true);
             BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
-            // Send our public key as JSON
-            String localPublicKeyJson = gson.toJson(StringUtil.getStringFromKey(localPublicKey));
+            // Send our public key as a JSON object
+            String localPublicKeyJson = gson.toJson(new Message(MessageType.PUBLIC_KEY_EXCHANGE, StringUtil.getStringFromKey(localPublicKey)));
+            System.out.println("Serialized Message being sent: " + localPublicKeyJson);
             output.println(localPublicKeyJson);
 
-            // Receive peer's public key as JSON
+            // Receive peer's public key as a JSON object
             String peerPublicKeyJson = input.readLine();
-            String peerPublicKeyStr = gson.fromJson(peerPublicKeyJson, String.class);
-            return StringUtil.getKeyFromString(peerPublicKeyStr);
+            System.out.println("Received Public Key JSON: " + peerPublicKeyJson);
+
+            Message message = gson.fromJson(peerPublicKeyJson, Message.class);
+
+            if (message.getType() == MessageType.PUBLIC_KEY_EXCHANGE) {
+                String peerPublicKeyStr = message.getData();
+                System.out.println("Converted Public Key String: " + peerPublicKeyStr);
+                return StringUtil.getKeyFromString(peerPublicKeyStr);
+            } else {
+                System.err.println("Expected PUBLIC_KEY_EXCHANGE message but received: " + message.getType());
+                return null;
+            }
+
         } catch (IOException e) {
             System.err.println("Failed to exchange public keys: " + e.getMessage());
             return null; // Return null if the exchange fails
@@ -142,9 +160,30 @@ public class NetworkManager {
         networkPool.submit(() -> {
             try (BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
                 String messageJson;
+                boolean keyExchangeCompleted = false;
+
                 while ((messageJson = input.readLine()) != null) {
-                    Message message = gson.fromJson(messageJson, Message.class);
-                    handleMessage(message, peerPublicKey);
+                    System.out.println("Received raw message: " + messageJson); // Print the raw JSON string
+
+                    if (!keyExchangeCompleted) {
+                        Message message = gson.fromJson(messageJson, Message.class);
+                        if (message.getType() == MessageType.PUBLIC_KEY_EXCHANGE) {
+                            System.out.println("Key exchange message received: " + message.getData());
+                            keyExchangeCompleted = true;
+                        } else {
+                            System.err.println("Expected PUBLIC_KEY_EXCHANGE, but received: " + message.getType());
+                            return; // Exit since the key exchange failed
+                        }
+                    } else {
+                        // After key exchange, expect a full Message object
+                        try {
+                            Message message = gson.fromJson(messageJson, Message.class);
+                            System.out.println("Blockchain message received: " + message.getType());
+                            handleMessage(message, peerPublicKey);
+                        } catch (Exception e) {
+                            System.err.println("Error processing blockchain message: " + e.getMessage());
+                        }
+                    }
                 }
             } catch (IOException e) {
                 System.err.println("Connection to peer lost: " + e.getMessage());
@@ -156,33 +195,19 @@ public class NetworkManager {
         });
     }
 
+
     // Handles a received message
     private void handleMessage(Message message, PublicKey peerPublicKey) {
         try {
             switch (message.getType()) {
-                case NEW_TRANSACTION:
-                    handleNewTransaction(message, peerPublicKey);
-                    break;
-                case NEW_BLOCK:
-                    handleNewBlock(message, peerPublicKey);
-                    break;
-                case BLOCKCHAIN_REQUEST:
-                    handleBlockchainRequest(peerPublicKey);
-                    break;
-                case BLOCKCHAIN_RESPONSE:
-                    handleBlockchainResponse(message);
-                    break;
-                case PEER_DISCOVERY_REQUEST:
-                    handlePeerDiscoveryRequest(peerPublicKey);
-                    break;
-                case PEER_DISCOVERY_RESPONSE:
-                    handlePeerDiscoveryResponse(message);
-                    break;
-                case SHARE_PEER_LIST:
-                    handleSharePeerList(message);
-                    break;
-                default:
-                    System.out.println("Unknown message type received");
+                case NEW_TRANSACTION -> handleNewTransaction(message, peerPublicKey);
+                case NEW_BLOCK -> handleNewBlock(message, peerPublicKey);
+                case BLOCKCHAIN_REQUEST -> handleBlockchainRequest(peerPublicKey);
+                case BLOCKCHAIN_RESPONSE -> handleBlockchainResponse(message);
+                case PEER_DISCOVERY_REQUEST -> handlePeerDiscoveryRequest(peerPublicKey);
+                case PEER_DISCOVERY_RESPONSE -> handlePeerDiscoveryResponse(message);
+                case SHARE_PEER_LIST -> handleSharePeerList(message);
+                default -> System.out.println("Unknown message type received");
             }
         } catch (Exception e) {
             System.err.println("Error handling message: " + e.getMessage());
@@ -238,37 +263,49 @@ public class NetworkManager {
     }
 
     // Handles a peer discovery request
+    // Handles a peer discovery request
     private void handlePeerDiscoveryRequest(PublicKey peerPublicKey) {
         try {
             System.out.println("Received peer discovery request from " + StringUtil.getStringFromKey(peerPublicKey));
-            String peersJson = gson.toJson(peers); // Serialize the peers map to JSON
-            sendMessageToPeer(peers.get(StringUtil.getStringFromKey(peerPublicKey)).getIpAddress(), new Message(MessageType.PEER_DISCOVERY_RESPONSE, peersJson));
+
+            // Serialize the peers map to JSON
+            String peersJson = gson.toJson(peers);
+            System.out.println("Serialized peers map: " + peersJson);
+
+            // Send the peer discovery response back to the requesting peer
+            String peerIp = peers.get(StringUtil.getStringFromKey(peerPublicKey)).getIpAddress();
+            sendMessageToPeer(peerIp, new Message(MessageType.PEER_DISCOVERY_RESPONSE, peersJson));
         } catch (IOException e) {
             System.err.println("Failed to handle peer discovery request: " + e.getMessage());
         }
     }
 
-    // Handles a peer discovery response
+    // Handles the peer discovery response
     private void handlePeerDiscoveryResponse(Message message) {
         try {
             System.out.println("Received peer discovery response");
-            Map<String, PeerInfo> receivedPeers = gson.fromJson(message.getData(), ConcurrentHashMap.class); // Deserialize the peers map
-            receivedPeers.forEach((publicKey, peerInfo) -> {
-                peers.putIfAbsent(publicKey, peerInfo); // Add any new peers to our list
-            });
+
+            // Deserialize the peers map from the response JSON
+            Map<String, PeerInfo> receivedPeers = gson.fromJson(message.getData(), ConcurrentHashMap.class);
+
+            // Log the deserialized map
+            System.out.println("Deserialized peers map: " + receivedPeers);
+
+            // Add any new peers to our list
+            receivedPeers.forEach(peers::putIfAbsent);
         } catch (Exception e) {
             System.err.println("Failed to handle peer discovery response: " + e.getMessage());
         }
     }
+
 
     // Handles the SHARE_PEER_LIST message
     private void handleSharePeerList(Message message) {
         try {
             System.out.println("Received peer list from peer");
             Map<String, PeerInfo> receivedPeers = gson.fromJson(message.getData(), ConcurrentHashMap.class); // Deserialize the peers map
-            receivedPeers.forEach((publicKey, peerInfo) -> {
-                peers.putIfAbsent(publicKey, peerInfo); // Add any new peers to our list
-            });
+            // Add any new peers to our list
+            receivedPeers.forEach(peers::putIfAbsent);
         } catch (Exception e) {
             System.err.println("Failed to handle peer list sharing: " + e.getMessage());
         }
