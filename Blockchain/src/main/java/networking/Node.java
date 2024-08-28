@@ -43,7 +43,7 @@ public class Node implements Runnable {
         } catch (IOException e) {
             connected = false;
             System.err.println("Failed to establish connection: " + e.getMessage());
-            throw new RuntimeException(e);
+            //throw new RuntimeException(e);
         }
     }
 
@@ -66,9 +66,7 @@ public class Node implements Runnable {
         } catch (IOException e) {
             System.err.println("Failed to read message: " + e.getMessage());
             connected = false;
-            removePeerInfo();
-        } finally {
-            cleanup();
+            //removePeerInfo();
         }
     }
 
@@ -97,7 +95,11 @@ public class Node implements Runnable {
     private void handleSharePeerList(Message receivedMsg) {
         ConcurrentHashMap<String, PeerInfo> receivedPeers = gson.fromJson(receivedMsg.getData(), ConcurrentHashMap.class);
         receivedPeers.forEach((publicKey, peerInfo) -> {
-            networkManager.getPeers().putIfAbsent(publicKey, peerInfo);
+            if (!networkManager.getPeers().containsKey(publicKey)) {
+                // If we don't already have this peer, add it
+                networkManager.getPeers().put(publicKey, new PeerInfo(peerInfo.getIpAddress()));
+                System.out.println("Added new peer from gossip: " + peerInfo.getIpAddress());
+            }
         });
         System.out.println("Updated peer list after receiving gossip.");
     }
@@ -149,7 +151,10 @@ public class Node implements Runnable {
     private void handlePeerDiscoveryResponse(Message receivedMsg) {
         ConcurrentHashMap<String, PeerInfo> receivedPeers = gson.fromJson(receivedMsg.getData(), ConcurrentHashMap.class);
         receivedPeers.forEach((publicKey, peerInfo) -> {
-            networkManager.getPeers().putIfAbsent(publicKey, peerInfo);
+            if (!networkManager.getPeers().containsKey(publicKey)) {
+                networkManager.getPeers().put(publicKey, new PeerInfo(peerInfo.getIpAddress()));
+                System.out.println("Added new peer from discovery: " + peerInfo.getIpAddress());
+            }
         });
     }
 
@@ -159,7 +164,7 @@ public class Node implements Runnable {
     }
 
     private void storePeerInfo(String incomingPublicKeyString) {
-        PeerInfo peerInfo = new PeerInfo(peerIp);
+        PeerInfo peerInfo = new PeerInfo(peerIp, socket);
         networkManager.getPeers().putIfAbsent(incomingPublicKeyString, peerInfo);
         System.out.println("Stored peer info: " + incomingPublicKeyString + " with IP: " + peerIp);
     }
@@ -167,19 +172,5 @@ public class Node implements Runnable {
     private void removePeerInfo() {
         networkManager.getPeers().remove(StringUtil.getStringFromKey(peerPublicKey));
         System.out.println("Removed peer info: " + peerIp + " due to disconnection.");
-    }
-
-    private void cleanup() {
-        try {
-            if (input != null) input.close();
-            if (output != null) output.close();
-            if (socket != null && !socket.isClosed()) socket.close();
-        } catch (IOException e) {
-            System.err.println("Failed to close resources: " + e.getMessage());
-        }
-    }
-
-    public String getPeerPublicKeyString() {
-        return StringUtil.getStringFromKey(peerPublicKey);
     }
 }

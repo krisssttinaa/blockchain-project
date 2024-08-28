@@ -5,16 +5,15 @@ import java.net.Socket;
 public class PeerInfo {
     private String ipAddress;
     private boolean isConnected;
-    private Socket socket; // New field to store the active socket connection
+    private transient Socket socket; // `transient` keyword ensures `socket` is not serialized
 
-    // Constructor for initial connection without a socket (for backward compatibility or when a socket isn't available yet)
+    // Constructor for initial connection without a socket
     public PeerInfo(String ipAddress) {
         this.ipAddress = ipAddress;
         this.isConnected = true;
-        this.socket = null;
     }
 
-    // New constructor that accepts a socket
+    // Constructor that accepts a socket
     public PeerInfo(String ipAddress, Socket socket) {
         this.ipAddress = ipAddress;
         this.isConnected = true;

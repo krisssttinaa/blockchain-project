@@ -27,9 +27,12 @@ public class NetworkManager {
         this.serverPort = serverPort;
         this.localPublicKey = localPublicKey;
         this.seedNodeAddress = seedNodeAddress;
+
+        // Start gossiping for all nodes
+        startGossiping();
     }
 
-    // Starts the server to accept incoming connections
+    // Starts the server to accept incoming connections (only for the seed node)
     public void startServer() {
         networkPool.submit(() -> {
             try (ServerSocket serverSocket = new ServerSocket(serverPort)) {
@@ -47,9 +50,6 @@ public class NetworkManager {
                 System.err.println("Server failed to start on port " + serverPort + ": " + e.getMessage());
             }
         });
-
-        // Start the gossip protocol
-        startGossiping();
     }
 
     // Connects to a peer using its IP address and port
@@ -60,9 +60,6 @@ public class NetworkManager {
                 Socket socket = new Socket(address, port);
                 handleNewConnection(socket);
                 System.out.println("Successfully connected to peer: " + address);
-
-                // Start gossiping for all nodes
-                startGossiping();
             } catch (IOException e) {
                 System.err.println("Failed to connect to peer: " + address + ". Error: " + e.getMessage());
             }
@@ -77,15 +74,17 @@ public class NetworkManager {
 
     // Initiates the gossip protocol
     void startGossiping() {
-        // Run the gossip protocol periodically
         networkPool.submit(() -> {
             while (true) {
                 try {
                     Thread.sleep(20000); // Gossip every 20 seconds
                     gossip();
                 } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
                     System.err.println("Gossiping thread interrupted: " + e.getMessage());
+                    break;
+                } catch (Exception e) {
+                    System.err.println("Unexpected error during gossiping: " + e.getMessage());
+                    e.printStackTrace();
                 }
             }
         });
@@ -102,10 +101,11 @@ public class NetworkManager {
 
         // Send the peer list to all connected peers
         peers.forEach((publicKey, peerInfo) -> {
-            if (peerInfo.isConnected()) {
+            Socket socket = peerInfo.getSocket();
+            if (peerInfo.isConnected() && socket != null) {
                 try {
                     System.out.println("Gossiping peer list to " + peerInfo.getIpAddress());
-                    sendMessageToPeer(peerInfo.getSocket(), new Message(MessageType.SHARE_PEER_LIST, gson.toJson(peers)));
+                    sendMessageToPeer(socket, new Message(MessageType.SHARE_PEER_LIST, gson.toJson(peers)));
                 } catch (IOException e) {
                     System.err.println("Failed to send gossip message to peer " + peerInfo.getIpAddress() + ": " + e.getMessage());
                     peerInfo.setConnected(false);
@@ -120,9 +120,10 @@ public class NetworkManager {
     public void broadcastMessage(Message message) {
         System.out.println("Broadcasting message to all peers...");
         peers.forEach((publicKey, peerInfo) -> {
-            if (peerInfo.isConnected()) {
+            Socket socket = peerInfo.getSocket();
+            if (peerInfo.isConnected() && socket != null) {
                 try {
-                    sendMessageToPeer(peerInfo.getSocket(), message);
+                    sendMessageToPeer(socket, message);
                 } catch (IOException e) {
                     System.err.println("Failed to send message to peer " + peerInfo.getIpAddress() + ": " + e.getMessage());
                     peerInfo.setConnected(false); // Mark the peer as disconnected
