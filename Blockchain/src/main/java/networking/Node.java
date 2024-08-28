@@ -5,6 +5,7 @@ import blockchain.Blockchain;
 import blockchain.StringUtil;
 import blockchain.Transaction;
 import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -93,12 +94,14 @@ public class Node implements Runnable {
     }
 
     private void handleSharePeerList(Message receivedMsg) {
-        ConcurrentHashMap<String, PeerInfo> receivedPeers = gson.fromJson(receivedMsg.getData(), ConcurrentHashMap.class);
+        System.out.println("Received gossip from peer: " + peerIp);
+        ConcurrentHashMap<String, PeerInfo> receivedPeers = gson.fromJson(receivedMsg.getData(), new TypeToken<ConcurrentHashMap<String, PeerInfo>>(){}.getType());
+
         receivedPeers.forEach((publicKey, peerInfo) -> {
-            if (!networkManager.getPeers().containsKey(publicKey)) {
-                // If we don't already have this peer, add it
+            // Avoid adding self or existing peers
+            if (!publicKey.equals(StringUtil.getStringFromKey(peerPublicKey)) && !networkManager.getPeers().containsKey(publicKey)) {
                 networkManager.getPeers().put(publicKey, new PeerInfo(peerInfo.getIpAddress()));
-                System.out.println("Added new peer from gossip: " + peerInfo.getIpAddress());
+                System.out.println("New peer added: " + publicKey + " with IP: " + peerInfo.getIpAddress());
             }
         });
         System.out.println("Updated peer list after receiving gossip.");

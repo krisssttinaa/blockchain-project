@@ -20,6 +20,12 @@ public class PeerInfo {
         this.socket = socket;
     }
 
+    public PeerInfo(String ipAddress, Socket socket, boolean isConnected) {
+        this.ipAddress = ipAddress;
+        this.isConnected = isConnected;
+        this.socket = socket;
+    }
+
     // Getters and setters
     public String getIpAddress() {
         return ipAddress;
