@@ -95,27 +95,33 @@ public class Node implements Runnable {
 
         System.out.println("Received handshake init with nonce: " + receivedNonce);
 
-        // Compare the nonces to decide who proceeds
+        local = generateNonce(); // Generate a new nonce if not already set
+        HandshakeMessage handshakeResponse = new HandshakeMessage(StringUtil.getStringFromKey(networkManager.getLocalPublicKey()), receivedNonce, local);
+        sendMessage(new Message(MessageType.HANDSHAKE_RESPONSE, gson.toJson(handshakeResponse)));
+        System.out.println("Handshake response sent with peer's nonce: " + receivedNonce + " and new nonce: " + local);
 
-            local = generateNonce(); // Generate a new nonce if not already set
-            HandshakeMessage handshakeResponse = new HandshakeMessage(StringUtil.getStringFromKey(networkManager.getLocalPublicKey()), receivedNonce, local);
-            sendMessage(new Message(MessageType.HANDSHAKE_RESPONSE, gson.toJson(handshakeResponse)));
-            System.out.println("Handshake response sent with peer's nonce: " + receivedNonce+" and new nonce: " + local);
         // Store peer's public key and nonce
         peerPublicKey = StringUtil.getKeyFromString(incomingPublicKeyString);
         peerNonce = receivedNonce;
+
+        // Temporarily store the peer info (will finalize after handshake)
+        storePeerInfo(incomingPublicKeyString);
     }
 
     private void handleHandshakeResponse(Message message) {
         HandshakeMessage handshakeMessage = gson.fromJson(message.getData(), HandshakeMessage.class);
         String receivedNonce = handshakeMessage.getNonce();
         String receivedPeerNonce = handshakeMessage.getNewNonce();
+        String incomingPublicKeyString = handshakeMessage.getPublicKey();
+
+        peerPublicKey = StringUtil.getKeyFromString(incomingPublicKeyString);
 
         System.out.println("Received handshake response with nonce: " + receivedNonce + ", expected: " + localNonce);
 
         // Verify the nonce
         if (!receivedNonce.equals(localNonce)) {
             System.out.println("Nonce verification failed. Handshake aborted.");
+            removePeerInfo(incomingPublicKeyString);  // Remove peer if handshake fails
             return;
         }
 
@@ -126,8 +132,8 @@ public class Node implements Runnable {
         System.out.println("Final handshake message sent. Handshake complete.");
         handshakeComplete = true;
 
-        // Proceed to broadcast the peer list after successful handshake
-        broadcastUpdatedPeerList();
+        // Store the peer info after successful handshake
+        storePeerInfo(incomingPublicKeyString);
     }
 
     private void handleHandshakeFinal(Message message) {
@@ -139,14 +145,12 @@ public class Node implements Runnable {
         // Verify the nonce
         if (!receivedNonce.equals(local)) {
             System.out.println("Final nonce verification failed. Handshake aborted.");
+            removePeerInfo(StringUtil.getStringFromKey(peerPublicKey)); // Remove peer if final verification fails
             return;
         }
 
         System.out.println("Final nonce verified. Handshake complete.");
         handshakeComplete = true;
-
-        // Proceed to broadcast the peer list after successful handshake
-        broadcastUpdatedPeerList();
     }
 
     private void handleNetworkMessage(Message message) {
@@ -158,6 +162,7 @@ public class Node implements Runnable {
             case SYNC_RESPONSE -> handleSyncResponse(message);
             case PEER_DISCOVERY_REQUEST -> handlePeerDiscoveryRequest();
             case PEER_DISCOVERY_RESPONSE -> handlePeerDiscoveryResponse(message);
+            case SHARE_PEER_LIST -> broadcastUpdatedPeerList(); // Share peer list only when explicitly requested
             default -> System.out.println("Unknown message type received: " + message.getType());
         }
     }
@@ -242,6 +247,13 @@ public class Node implements Runnable {
 
     private void storePeerInfo(String incomingPublicKeyString) {
         String peerIp = socket.getInetAddress().getHostAddress();
-        networkManager.getPeers().putIfAbsent(incomingPublicKeyString, new PeerInfo(peerIp));
+        PeerInfo peerInfo = new PeerInfo(peerIp);
+        networkManager.getPeers().putIfAbsent(incomingPublicKeyString, peerInfo);
+        System.out.println("Stored peer info: " + incomingPublicKeyString + " with IP: " + peerIp);
+    }
+
+    private void removePeerInfo(String incomingPublicKeyString) {
+        networkManager.getPeers().remove(incomingPublicKeyString);
+        System.out.println("Removed peer info: " + incomingPublicKeyString + " due to handshake failure.");
     }
 }
