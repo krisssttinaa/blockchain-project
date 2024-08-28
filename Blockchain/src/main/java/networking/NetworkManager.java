@@ -33,19 +33,23 @@ public class NetworkManager {
     public void startServer() {
         networkPool.submit(() -> {
             try (ServerSocket serverSocket = new ServerSocket(serverPort)) {
-                System.out.println("Server started, waiting for connections...");
+                System.out.println("Server started, waiting for connections on port: " + serverPort);
                 while (!Thread.currentThread().isInterrupted()) {
                     try {
                         Socket clientSocket = serverSocket.accept();
-                        handleNewConnection(clientSocket, false);
+                        System.out.println("Accepted connection from " + clientSocket.getInetAddress().getHostAddress());
+                        handleNewConnection(clientSocket);
                     } catch (IOException e) {
                         System.err.println("Error accepting new connection: " + e.getMessage());
                     }
                 }
             } catch (IOException e) {
-                System.err.println("Server failed to start: " + e.getMessage());
+                System.err.println("Server failed to start on port " + serverPort + ": " + e.getMessage());
             }
         });
+
+        // Start the gossip protocol
+        startGossiping();
     }
 
     // Connects to a peer using its IP address and port
@@ -54,8 +58,11 @@ public class NetworkManager {
         networkPool.submit(() -> {
             try {
                 Socket socket = new Socket(address, port);
-                handleNewConnection(socket, address.equals(seedNodeAddress));
+                handleNewConnection(socket);
                 System.out.println("Successfully connected to peer: " + address);
+
+                // Start gossiping for all nodes
+                startGossiping();
             } catch (IOException e) {
                 System.err.println("Failed to connect to peer: " + address + ". Error: " + e.getMessage());
             }
@@ -63,9 +70,56 @@ public class NetworkManager {
     }
 
     // Handles a new connection from a peer
-    private void handleNewConnection(Socket socket, boolean isSeedNode) {
-        Node node = new Node(socket, blockchain, this, isSeedNode);
+    private void handleNewConnection(Socket socket) {
+        Node node = new Node(socket, blockchain, this);
         networkPool.submit(node); // Start the node in a new thread
+
+        // Store the peer info after the public key is exchanged
+        String peerPublicKeyString = node.getPeerPublicKeyString();
+        PeerInfo peerInfo = new PeerInfo(socket.getInetAddress().getHostAddress(), socket);
+        peers.put(peerPublicKeyString, peerInfo);
+        System.out.println("Stored peer info: " + peerPublicKeyString + " with IP: " + peerInfo.getIpAddress());
+    }
+
+    // Initiates the gossip protocol
+    void startGossiping() {
+        // Run the gossip protocol periodically
+        networkPool.submit(() -> {
+            while (true) {
+                try {
+                    Thread.sleep(20000); // Gossip every 20 seconds
+                    gossip();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    System.err.println("Gossiping thread interrupted: " + e.getMessage());
+                }
+            }
+        });
+    }
+
+    // Gossip the peer list to all connected peers
+    private void gossip() {
+        if (peers.isEmpty()) {
+            System.out.println("No peers to gossip with.");
+            return; // No peers to gossip with
+        }
+
+        System.out.println("Gossiping peer list to " + peers.size() + " peers.");
+
+        // Send the peer list to all connected peers
+        peers.forEach((publicKey, peerInfo) -> {
+            if (peerInfo.isConnected()) {
+                try {
+                    System.out.println("Gossiping peer list to " + peerInfo.getIpAddress());
+                    sendMessageToPeer(peerInfo.getSocket(), new Message(MessageType.SHARE_PEER_LIST, gson.toJson(peers)));
+                } catch (IOException e) {
+                    System.err.println("Failed to send gossip message to peer " + peerInfo.getIpAddress() + ": " + e.getMessage());
+                    peerInfo.setConnected(false);
+                }
+            } else {
+                System.out.println("Peer " + peerInfo.getIpAddress() + " is marked as disconnected. Skipping.");
+            }
+        });
     }
 
     // Broadcasts a message to all connected peers
@@ -74,7 +128,7 @@ public class NetworkManager {
         peers.forEach((publicKey, peerInfo) -> {
             if (peerInfo.isConnected()) {
                 try {
-                    sendMessageToPeer(peerInfo.getIpAddress(), message);
+                    sendMessageToPeer(peerInfo.getSocket(), message);
                 } catch (IOException e) {
                     System.err.println("Failed to send message to peer " + peerInfo.getIpAddress() + ": " + e.getMessage());
                     peerInfo.setConnected(false); // Mark the peer as disconnected
@@ -83,15 +137,20 @@ public class NetworkManager {
         });
     }
 
-    // Sends a message to a specific peer
-    private void sendMessageToPeer(String ip, Message message) throws IOException {
-        try (Socket socket = new Socket(ip, serverPort)) { // Open connection
+    // Sends a message to a specific peer using an existing socket connection
+    private void sendMessageToPeer(Socket socket, Message message) throws IOException {
+        if (socket == null || socket.isClosed()) {
+            throw new IOException("Socket is not available or closed.");
+        }
+
+        try {
             PrintWriter output = new PrintWriter(socket.getOutputStream(), true);
             String messageJson = gson.toJson(message);
             output.println(messageJson); // Send message
-            System.out.println("Sent message to peer " + ip);
+            System.out.println("Sent message to peer " + socket.getInetAddress().getHostAddress());
         } catch (IOException e) {
-            System.err.println("Failed to send message to peer at " + ip + ": " + e.getMessage());
+            System.err.println("Failed to send message to peer at " + socket.getInetAddress().getHostAddress() + ": " + e.getMessage());
+            throw e;
         }
     }
 
