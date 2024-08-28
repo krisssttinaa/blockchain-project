@@ -73,12 +73,6 @@ public class NetworkManager {
     private void handleNewConnection(Socket socket) {
         Node node = new Node(socket, blockchain, this);
         networkPool.submit(node); // Start the node in a new thread
-
-        // Store the peer info after the public key is exchanged
-        String peerPublicKeyString = node.getPeerPublicKeyString();
-        PeerInfo peerInfo = new PeerInfo(socket.getInetAddress().getHostAddress(), socket);
-        peers.put(peerPublicKeyString, peerInfo);
-        System.out.println("Stored peer info: " + peerPublicKeyString + " with IP: " + peerInfo.getIpAddress());
     }
 
     // Initiates the gossip protocol

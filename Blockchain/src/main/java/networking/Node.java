@@ -75,8 +75,8 @@ public class Node implements Runnable {
     private void handlePublicKeyExchange(Message message) {
         String peerPublicKeyString = message.getData();
         this.peerPublicKey = StringUtil.getKeyFromString(peerPublicKeyString);
-        storePeerInfo(peerPublicKeyString);
         publicKeyExchanged = true;
+        storePeerInfo(peerPublicKeyString);
         System.out.println("Public key exchanged with peer: " + peerIp);
     }
 
@@ -159,7 +159,7 @@ public class Node implements Runnable {
     }
 
     private void storePeerInfo(String incomingPublicKeyString) {
-        PeerInfo peerInfo = new PeerInfo(peerIp, socket);
+        PeerInfo peerInfo = new PeerInfo(peerIp);
         networkManager.getPeers().putIfAbsent(incomingPublicKeyString, peerInfo);
         System.out.println("Stored peer info: " + incomingPublicKeyString + " with IP: " + peerIp);
     }
