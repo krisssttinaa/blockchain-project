@@ -19,6 +19,7 @@ public class Main {
     public static int difficulty = 5;
     private static final String BLOCKCHAIN_FILE = "blockchain.dat";
     private static final String SEED_NODE_ADDRESS = "172.18.0.2";
+    public static final int NODE_PORT = 7777;
 
     public static void main(String[] args) {
 
@@ -27,7 +28,7 @@ public class Main {
 
         Blockchain blockchain = new Blockchain();
         Wallet senderWallet = new Wallet();
-        NetworkManager networkManager = new NetworkManager(blockchain, 7777, senderWallet.publicKey, SEED_NODE_ADDRESS);
+        NetworkManager networkManager = new NetworkManager(blockchain, senderWallet.publicKey, SEED_NODE_ADDRESS);
 
         // Load blockchain from disk if it exists
         File file = new File(BLOCKCHAIN_FILE);
@@ -40,14 +41,10 @@ public class Main {
             String currentIp = getCurrentIp();
             System.out.println("Current IP Address: " + currentIp);
 
-            if (SEED_NODE_ADDRESS.equals(currentIp)) {
-                System.out.println("This node is the seed node.");
-                networkManager.startServer();
-            } else {
-                System.out.println("Connecting to seed node at " + SEED_NODE_ADDRESS);
-                networkManager.connectToPeer(SEED_NODE_ADDRESS, 7777);
-                System.out.println("Connected to seed node.");
-            }
+            System.out.println("Connecting to seed node at " + SEED_NODE_ADDRESS);
+            networkManager.connectToPeer(SEED_NODE_ADDRESS, NODE_PORT);
+            System.out.println("Connected to seed node.");
+
         } catch (SocketException e) {
             System.err.println("Error determining IP address: " + e.getMessage());
         }

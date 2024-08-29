@@ -1,4 +1,4 @@
-package networking;
+package old_networking;
 
 public class HandshakeMessage {
     private String publicKey;

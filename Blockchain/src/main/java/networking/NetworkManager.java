@@ -1,42 +1,54 @@
 package networking;
 
 import blockchain.Blockchain;
+import blockchain.StringUtil;
 import com.google.gson.Gson;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.security.PublicKey;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import static blockchain.Main.NODE_PORT;
 
 public class NetworkManager {
     private final Map<String, PeerInfo> peers = new ConcurrentHashMap<>(); // Store PeerInfo by public key
     private final ExecutorService networkPool = Executors.newCachedThreadPool(); // Thread pool for networking tasks
     private final Blockchain blockchain;
-    private final int serverPort;
     private final PublicKey localPublicKey;
     private final Gson gson = new Gson(); // Gson instance for JSON handling
     private final String seedNodeAddress; // Store the seed node address
+    private static final int MAX_RETRIES = 3; // Maximum number of retry attempts
 
-    public NetworkManager(Blockchain blockchain, int serverPort, PublicKey localPublicKey, String seedNodeAddress) {
+    public NetworkManager(Blockchain blockchain, PublicKey localPublicKey, String seedNodeAddress) {
         this.blockchain = blockchain;
-        this.serverPort = serverPort;
         this.localPublicKey = localPublicKey;
         this.seedNodeAddress = seedNodeAddress;
+
+        // Start the server to accept incoming connections on the same port (7777)
+        startServer();
 
         // Start gossiping for all nodes
         startGossiping();
     }
 
-    // Starts the server to accept incoming connections (only for the seed node)
+    // Starts the server to accept incoming connections
     public void startServer() {
         networkPool.submit(() -> {
-            try (ServerSocket serverSocket = new ServerSocket(serverPort)) {
-                System.out.println("Server started, waiting for connections on port: " + serverPort);
+            try (ServerSocket serverSocket = new ServerSocket(NODE_PORT)) {
+                // Retrieve the actual port the server is listening on
+                int actualPort = serverSocket.getLocalPort();
+
+                // Log the actual IP and port
+                System.out.println("Server started, waiting for connections on IP: " + getLocalIPAddress() + ", port: " + actualPort);
+
                 while (!Thread.currentThread().isInterrupted()) {
                     try {
                         Socket clientSocket = serverSocket.accept();
@@ -47,29 +59,107 @@ public class NetworkManager {
                     }
                 }
             } catch (IOException e) {
-                System.err.println("Server failed to start on port " + serverPort + ": " + e.getMessage());
+                System.err.println("Server failed to start on port " + NODE_PORT + ": " + e.getMessage());
             }
         });
     }
 
-    // Connects to a peer using its IP address and port
+    // Utility method to get the local IP address
+    private String getLocalIPAddress() {
+        try {
+            return InetAddress.getLocalHost().getHostAddress();
+        } catch (IOException e) {
+            System.err.println("Failed to get local IP address: " + e.getMessage());
+            return "Unknown IP";
+        }
+    }
+
+    // Connects to a peer using its IP address and port with retry logic
     public void connectToPeer(String address, int port) {
-        System.out.println("Attempting to connect to peer: " + address);
         networkPool.submit(() -> {
-            try {
-                Socket socket = new Socket(address, port);
-                handleNewConnection(socket);
-                System.out.println("Successfully connected to peer: " + address);
-            } catch (IOException e) {
-                System.err.println("Failed to connect to peer: " + address + ". Error: " + e.getMessage());
+            synchronized (peers) {
+                // Check if there's already a connection with this peer
+                Optional<PeerInfo> existingPeerInfo = peers.values().stream()
+                        .filter(peerInfo -> peerInfo.getIpAddress().equals(address) && peerInfo.isConnected())
+                        .findFirst();
+
+                if (existingPeerInfo.isPresent()) {
+                    System.out.println("Connection to peer " + address + " already exists. Skipping new connection.");
+                    return; // Skip the new connection if an existing one is found
+                }
+            }
+
+            int attempts = 0;
+            while (attempts < MAX_RETRIES) {
+                try {
+                    System.out.println("Attempting to connect to peer: " + address + " on port: " + port + " (Attempt " + (attempts + 1) + ")");
+                    Socket socket = new Socket(address, port);
+
+                    synchronized (peers) {
+                        // Check again to see if the peer has been connected while the socket was being created
+                        Optional<PeerInfo> existingPeerInfo = peers.values().stream()
+                                .filter(peerInfo -> peerInfo.getIpAddress().equals(address) && peerInfo.isConnected())
+                                .findFirst();
+
+                        if (existingPeerInfo.isPresent()) {
+                            System.out.println("A connection was established while creating a new one. Closing new socket.");
+                            socket.close();
+                            return; // If an existing connection is found, close the new socket and return
+                        }
+
+                        handleNewConnection(socket);
+                        String peerPublicKey = StringUtil.getStringFromKey(getPeerPublicKey(socket));
+                        PeerInfo peerInfo = peers.get(peerPublicKey);
+
+                        if (peerInfo != null) {
+                            peerInfo.setSocket(socket);
+                            peerInfo.setConnected(true);  // Mark the peer as connected
+                            System.out.println("Successfully connected to peer: " + address);
+                            return; // Exit if successful
+                        }
+                    }
+                } catch (IOException e) {
+                    attempts++;
+                    System.err.println("Failed to connect to peer: " + address + " on attempt " + attempts + ". Error: " + e.getMessage());
+                    if (attempts >= MAX_RETRIES) {
+                        System.err.println("Max retry attempts reached. Marking peer " + address + " as disconnected.");
+                        updatePeerConnectionStatus(address, false);
+                    } else {
+                        try {
+                            Thread.sleep(2000); // Wait before retrying
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
+                }
             }
         });
     }
 
     // Handles a new connection from a peer
     private void handleNewConnection(Socket socket) {
-        Node node = new Node(socket, blockchain, this);
-        networkPool.submit(node); // Start the node in a new thread
+        String peerIp = socket.getInetAddress().getHostAddress();
+
+        synchronized (peers) {
+            // Check if there's already a connected peer with the same IP
+            Optional<PeerInfo> existingPeerInfo = peers.values().stream()
+                    .filter(peerInfo -> peerInfo.getIpAddress().equals(peerIp) && peerInfo.isConnected())
+                    .findFirst();
+
+            if (existingPeerInfo.isPresent()) {
+                System.out.println("A connection already exists with " + peerIp + ". Closing the new socket.");
+                try {
+                    socket.close(); // Close the new socket to avoid duplicate connections
+                } catch (IOException e) {
+                    System.err.println("Failed to close duplicate socket: " + e.getMessage());
+                }
+                return;
+            }
+
+            // If no existing connection, proceed with handling the new connection
+            Node node = new Node(socket, blockchain, this);
+            networkPool.submit(node); // Start the node in a new thread
+        }
     }
 
     // Initiates the gossip protocol
@@ -97,21 +187,25 @@ public class NetworkManager {
             return; // No peers to gossip with
         }
 
-        System.out.println("Gossiping peer list to " + peers.size() + " peers.");
+        System.out.println("Gossiping peer list to connected peers.");
 
         // Send the peer list to all connected peers
         peers.forEach((publicKey, peerInfo) -> {
-            Socket socket = peerInfo.getSocket();
-            if (peerInfo.isConnected() && socket != null) {
+            if (peerInfo.isConnected() && peerInfo.getSocket() != null) {
                 try {
                     System.out.println("Gossiping peer list to " + peerInfo.getIpAddress());
-                    sendMessageToPeer(socket, new Message(MessageType.SHARE_PEER_LIST, gson.toJson(peers)));
+                    sendMessageToPeer(peerInfo.getSocket(), new Message(MessageType.SHARE_PEER_LIST, gson.toJson(peers)));
                 } catch (IOException e) {
                     System.err.println("Failed to send gossip message to peer " + peerInfo.getIpAddress() + ": " + e.getMessage());
                     peerInfo.setConnected(false);
                 }
             } else {
-                System.out.println("Peer " + peerInfo.getIpAddress() + " is marked as disconnected. Skipping.");
+                if (peerInfo.isConnected()){
+                    System.out.println("Peer " + peerInfo.getIpAddress() + " is marked as disconnected. Skipping.");
+
+                } else {
+                    System.out.println("Peer " + peerInfo.getIpAddress() + " has no socket. Skipping.");
+                }
             }
         });
     }
@@ -149,11 +243,26 @@ public class NetworkManager {
         }
     }
 
+    public void updatePeerConnectionStatus(String peerIp, boolean status) {
+        synchronized (peers) {
+            peers.values().stream()
+                    .filter(peerInfo -> peerInfo.getIpAddress().equals(peerIp))
+                    .forEach(peerInfo -> {
+                        System.out.println("Updating connection status for peer " + peerIp + " to " + status);
+                        peerInfo.setConnected(status);
+                    });
+        }
+    }
+
     public PublicKey getLocalPublicKey() {
         return localPublicKey;
     }
 
     public Map<String, PeerInfo> getPeers() {
         return peers;
+    }
+
+    public PublicKey getPeerPublicKey(Socket socket) {
+        return null; // Replace with actual logic
     }
 }

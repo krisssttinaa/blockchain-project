@@ -15,6 +15,8 @@ import java.net.Socket;
 import java.security.PublicKey;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static blockchain.Main.NODE_PORT;
+
 public class Node implements Runnable {
     private final Socket socket;
     private final Blockchain blockchain;
@@ -43,8 +45,7 @@ public class Node implements Runnable {
 
         } catch (IOException e) {
             connected = false;
-            System.err.println("Failed to establish connection: " + e.getMessage());
-            //throw new RuntimeException(e);
+            System.err.println("Failed to establish connection with " + peerIp + ": " + e.getMessage());
         }
     }
 
@@ -58,15 +59,16 @@ public class Node implements Runnable {
                     if (receivedMsg.getType() == MessageType.PUBLIC_KEY_EXCHANGE) {
                         handlePublicKeyExchange(receivedMsg);
                     } else {
-                        System.out.println("Public key not exchanged yet. Ignoring message of type: " + receivedMsg.getType());
+                        System.out.println("Public key not exchanged yet with " + peerIp + ". Ignoring message of type: " + receivedMsg.getType());
                     }
                 } else {
                     handleNetworkMessage(receivedMsg);
                 }
             }
         } catch (IOException e) {
-            System.err.println("Failed to read message: " + e.getMessage());
+            System.err.println("Failed to read message from " + peerIp + ": " + e.getMessage());
             connected = false;
+            // Handle disconnection
             //removePeerInfo();
         }
     }
@@ -77,10 +79,14 @@ public class Node implements Runnable {
         publicKeyExchanged = true;
         storePeerInfo(peerPublicKeyString);
         System.out.println("Public key exchanged with peer: " + peerIp);
+
+        // Send back an acknowledgment or a message indicating the connection is fully established
+        sendMessage(new Message(MessageType.CONNECTION_ESTABLISHED, "Connection established with peer: " + peerIp));
     }
 
     private void handleNetworkMessage(Message message) {
         switch (message.getType()) {
+            case CONNECTION_ESTABLISHED -> handleConnectionEstablished();
             case NEW_TRANSACTION -> handleNewTransaction(message);
             case NEW_BLOCK -> handleNewBlock(message);
             case BLOCKCHAIN_REQUEST -> handleBlockchainRequest();
@@ -89,21 +95,53 @@ public class Node implements Runnable {
             case PEER_DISCOVERY_REQUEST -> handlePeerDiscoveryRequest();
             case PEER_DISCOVERY_RESPONSE -> handlePeerDiscoveryResponse(message);
             case SHARE_PEER_LIST -> handleSharePeerList(message);
-            default -> System.out.println("Unknown message type received: " + message.getType());
+            default -> System.out.println("Unknown message type received from " + peerIp + ": " + message.getType());
         }
+    }
+
+    private void handleConnectionEstablished() {
+        synchronized (networkManager.getPeers()) {
+            System.out.println("Handling connection established with peer: " + peerIp);
+
+            // Check status before updating
+            System.out.println("Before updating, isConnected status for peer " + peerIp + ": " + isPeerConnected());
+
+            // Update connection status
+            networkManager.updatePeerConnectionStatus(peerIp, true);
+
+            // Check status after updating
+            System.out.println("After updating, isConnected status for peer " + peerIp + ": " + isPeerConnected());
+
+            System.out.println("Connection fully established with peer: " + peerIp);
+        }
+    }
+
+    private boolean isPeerConnected() {
+        return networkManager.getPeers().values().stream()
+                .filter(peerInfo -> peerInfo.getIpAddress().equals(peerIp))
+                .map(PeerInfo::isConnected)
+                .findFirst()
+                .orElse(false);
     }
 
     private void handleSharePeerList(Message receivedMsg) {
         System.out.println("Received gossip from peer: " + peerIp);
         ConcurrentHashMap<String, PeerInfo> receivedPeers = gson.fromJson(receivedMsg.getData(), new TypeToken<ConcurrentHashMap<String, PeerInfo>>(){}.getType());
 
+        String localPublicKeyString = StringUtil.getStringFromKey(networkManager.getLocalPublicKey());
+
         receivedPeers.forEach((publicKey, peerInfo) -> {
             // Avoid adding self or existing peers
-            if (!publicKey.equals(StringUtil.getStringFromKey(peerPublicKey)) && !networkManager.getPeers().containsKey(publicKey)) {
-                networkManager.getPeers().put(publicKey, new PeerInfo(peerInfo.getIpAddress()));
-                System.out.println("New peer added: " + publicKey + " with IP: " + peerInfo.getIpAddress());
+            if (!publicKey.equals(localPublicKeyString) && !networkManager.getPeers().containsKey(publicKey)) {
+                // Add the peer with isConnected set to false
+                networkManager.getPeers().put(publicKey, new PeerInfo(peerInfo.getIpAddress(), false));
+                System.out.println("New peer added (disconnected): " + publicKey + " with IP: " + peerInfo.getIpAddress());
+
+                // Try to connect to the newly discovered peer
+                networkManager.connectToPeer(peerInfo.getIpAddress(), NODE_PORT);
             }
         });
+
         System.out.println("Updated peer list after receiving gossip.");
     }
 
@@ -117,7 +155,7 @@ public class Node implements Runnable {
             Block latestBlock = blockchain.getLatestBlock();
             networkManager.broadcastMessage(new Message(MessageType.NEW_BLOCK, gson.toJson(latestBlock)));
         } else {
-            System.out.println("Transaction failed validation and was not added.");
+            System.out.println("Transaction from " + peerIp + " failed validation and was not added.");
         }
     }
 
@@ -127,7 +165,7 @@ public class Node implements Runnable {
             System.out.println("Block validated and added to the chain, broadcasting...");
             networkManager.broadcastMessage(new Message(MessageType.NEW_BLOCK, gson.toJson(block)));
         } else {
-            System.out.println("Block validation failed.");
+            System.out.println("Block validation failed for block from " + peerIp + ".");
         }
     }
 
@@ -155,7 +193,7 @@ public class Node implements Runnable {
         ConcurrentHashMap<String, PeerInfo> receivedPeers = gson.fromJson(receivedMsg.getData(), ConcurrentHashMap.class);
         receivedPeers.forEach((publicKey, peerInfo) -> {
             if (!networkManager.getPeers().containsKey(publicKey)) {
-                networkManager.getPeers().put(publicKey, new PeerInfo(peerInfo.getIpAddress()));
+                networkManager.getPeers().put(publicKey, new PeerInfo(peerInfo.getIpAddress(), false));
                 System.out.println("Added new peer from discovery: " + peerInfo.getIpAddress());
             }
         });
@@ -167,7 +205,7 @@ public class Node implements Runnable {
     }
 
     private void storePeerInfo(String incomingPublicKeyString) {
-        PeerInfo peerInfo = new PeerInfo(peerIp, socket);
+        PeerInfo peerInfo = new PeerInfo(peerIp, socket, true); // Initialize with the socket and connected status
         networkManager.getPeers().putIfAbsent(incomingPublicKeyString, peerInfo);
         System.out.println("Stored peer info: " + incomingPublicKeyString + " with IP: " + peerIp);
     }
@@ -176,4 +214,5 @@ public class Node implements Runnable {
         networkManager.getPeers().remove(StringUtil.getStringFromKey(peerPublicKey));
         System.out.println("Removed peer info: " + peerIp + " due to disconnection.");
     }
+
 }
