@@ -3,7 +3,6 @@ package networking;
 import blockchain.Blockchain;
 import blockchain.StringUtil;
 import com.google.gson.Gson;
-
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.InetAddress;
@@ -15,7 +14,6 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-
 import static blockchain.Main.NODE_PORT;
 
 public class NetworkManager {
@@ -24,19 +22,14 @@ public class NetworkManager {
     private final Blockchain blockchain;
     private final PublicKey localPublicKey;
     private final Gson gson = new Gson(); // Gson instance for JSON handling
-    private final String seedNodeAddress; // Store the seed node address
+
     private static final int MAX_RETRIES = 3; // Maximum number of retry attempts
 
-    public NetworkManager(Blockchain blockchain, PublicKey localPublicKey, String seedNodeAddress) {
+    public NetworkManager(Blockchain blockchain, PublicKey localPublicKey) {
         this.blockchain = blockchain;
         this.localPublicKey = localPublicKey;
-        this.seedNodeAddress = seedNodeAddress;
-
-        // Start the server to accept incoming connections on the same port (7777)
-        startServer();
-
-        // Start gossiping for all nodes
-        startGossiping();
+        startServer(); // Start the server to accept incoming connections on the same port (7777)
+        startGossiping(); // Start gossiping for all nodes
     }
 
     // Starts the server to accept incoming connections
@@ -44,9 +37,6 @@ public class NetworkManager {
         networkPool.submit(() -> {
             try (ServerSocket serverSocket = new ServerSocket(NODE_PORT)) {
                 // Retrieve the actual port the server is listening on
-                int actualPort = serverSocket.getLocalPort();
-                System.out.println("Server started, waiting for connections on IP: " + getLocalIPAddress() + ", port: " + actualPort);
-
                 while (!Thread.currentThread().isInterrupted()) {
                     try {
                         Socket clientSocket = serverSocket.accept();
@@ -129,6 +119,7 @@ public class NetworkManager {
 
                         handleNewConnection(socket);
                         String peerPublicKey = StringUtil.getStringFromKey(getPeerPublicKey(socket));
+                        System.out.println("PUBLIC KEY: " + peerPublicKey);
                         PeerInfo peerInfo = peers.get(peerPublicKey);
 
                         if (peerInfo != null) {
@@ -161,7 +152,7 @@ public class NetworkManager {
         networkPool.submit(() -> {
             while (true) {
                 try {
-                    Thread.sleep(20000); // Gossip every 20 seconds
+                    Thread.sleep(50000); // Gossip every 20 seconds
                     gossip();
                 } catch (InterruptedException e) {
                     System.err.println("Gossiping thread interrupted: " + e.getMessage());
@@ -185,7 +176,7 @@ public class NetworkManager {
 
         // Send the peer list to all connected peers
         peers.forEach((publicKey, peerInfo) -> {
-            if (peerInfo.isConnected() && peerInfo.getSocket() != null) {
+            if (peerInfo.isConnected()) {
                 try {
                     System.out.println("Gossiping peer list to " + peerInfo.getIpAddress());
                     sendMessageToPeer(peerInfo.getSocket(), new Message(MessageType.SHARE_PEER_LIST, gson.toJson(peers)));
@@ -258,9 +249,7 @@ public class NetworkManager {
     }
 
     public PublicKey getPeerPublicKey(Socket socket) {
-        // Example logic to extract a peer's public key from the socket
-        // This could involve some sort of handshake or initial data exchange
-        // Implement this based on your protocol
-        return null; // Placeholder; replace with actual logic
+        return StringUtil.getKeyFromString(socket.getInetAddress().getHostAddress());
     }
+
 }

@@ -25,7 +25,7 @@ public class Main {
 
         Blockchain blockchain = new Blockchain();
         Wallet senderWallet = new Wallet();
-        NetworkManager networkManager = new NetworkManager(blockchain, senderWallet.publicKey, SEED_NODE_ADDRESS);
+        NetworkManager networkManager = new NetworkManager(blockchain, senderWallet.publicKey);
 
         // Load blockchain from disk if it exists
         File file = new File(BLOCKCHAIN_FILE);

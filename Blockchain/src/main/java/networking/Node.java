@@ -6,7 +6,6 @@ import blockchain.StringUtil;
 import blockchain.Transaction;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -15,7 +14,6 @@ import java.net.Socket;
 import java.security.PublicKey;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import static blockchain.Main.NODE_PORT;
 
 public class Node implements Runnable {
