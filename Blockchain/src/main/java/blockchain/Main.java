@@ -7,10 +7,7 @@ import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.security.Security;
-import java.util.ArrayList;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
 
 public class Main {
     public static HashMap<String, TransactionOutput> UTXOs = new HashMap<>();
@@ -40,11 +37,11 @@ public class Main {
         try {
             String currentIp = getCurrentIp();
             System.out.println("Current IP Address: " + currentIp);
-
-            System.out.println("Connecting to seed node at " + SEED_NODE_ADDRESS);
-            networkManager.connectToPeer(SEED_NODE_ADDRESS, NODE_PORT);
-            System.out.println("Connected to seed node.");
-
+            if(!Objects.equals(currentIp, SEED_NODE_ADDRESS)) {
+                System.out.println("Connecting to seed node at " + SEED_NODE_ADDRESS);
+                networkManager.connectToPeer(SEED_NODE_ADDRESS, NODE_PORT);
+                System.out.println("Connected to seed node.");
+            }
         } catch (SocketException e) {
             System.err.println("Error determining IP address: " + e.getMessage());
         }

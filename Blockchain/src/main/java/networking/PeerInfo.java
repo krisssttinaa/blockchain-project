@@ -14,14 +14,6 @@ public class PeerInfo {
         printStateChange("Constructor (IP + isConnected)");
     }
 
-    // Constructor that accepts a socket
-    public PeerInfo(String ipAddress, Socket socket) {
-        this.ipAddress = ipAddress;
-        this.socket = socket;
-        this.isConnected = true;  // Connected upon socket creation
-        printStateChange("Constructor (IP + Socket)");
-    }
-
     // Constructor for initializing with both socket and connection status
     public PeerInfo(String ipAddress, Socket socket, boolean isConnected) {
         this.ipAddress = ipAddress;
