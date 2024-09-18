@@ -8,6 +8,7 @@ import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.security.PublicKey;
 import java.util.Map;
 import java.util.Optional;
@@ -78,7 +79,7 @@ public class NetworkManager {
                 } catch (IOException e) {
                     System.err.println("Failed to close duplicate socket: " + e.getMessage());
                 }
-                return;
+                return;  // Avoid creating another connection
             }
 
             // Proceed with handling the new connection
@@ -90,13 +91,14 @@ public class NetworkManager {
     public void connectToPeer(String address, int port) {
         networkPool.submit(() -> {
             synchronized (peers) {
+                // Check if there is already an established connection
                 Optional<PeerInfo> existingPeerInfo = peers.values().stream()
                         .filter(peerInfo -> peerInfo.getIpAddress().equals(address) && peerInfo.isConnected())
                         .findFirst();
 
                 if (existingPeerInfo.isPresent()) {
                     System.out.println("Connection to peer " + address + " already exists. Skipping new connection.");
-                    return;
+                    return;  // Exit if the peer is already connected
                 }
             }
 
@@ -106,7 +108,11 @@ public class NetworkManager {
                     System.out.println("Attempting to connect to peer: " + address + " on port: " + port + " (Attempt " + (attempts + 1) + ")");
                     Socket socket = new Socket(address, port);
 
+                    // Configure socket options (timeout, keep-alive)
+                    configureSocket(socket);
+
                     synchronized (peers) {
+                        // Double-check after creating the socket if the peer was connected in the meantime
                         Optional<PeerInfo> existingPeerInfo = peers.values().stream()
                                 .filter(peerInfo -> peerInfo.getIpAddress().equals(address) && peerInfo.isConnected())
                                 .findFirst();
@@ -114,12 +120,12 @@ public class NetworkManager {
                         if (existingPeerInfo.isPresent()) {
                             System.out.println("A connection was established while creating a new one. Closing new socket.");
                             socket.close();
-                            return;
+                            return;  // If already connected, close the newly created socket
                         }
 
+                        // Proceed with handling the new connection
                         handleNewConnection(socket);
                         String peerPublicKey = StringUtil.getStringFromKey(getPeerPublicKey(socket));
-                        System.out.println("PUBLIC KEY: " + peerPublicKey);
                         PeerInfo peerInfo = peers.get(peerPublicKey);
 
                         if (peerInfo != null) {
@@ -146,6 +152,12 @@ public class NetworkManager {
             }
         });
     }
+
+    private void configureSocket(Socket socket) throws SocketException {
+        //socket.setSoTimeout(30000); // Set a 30-second timeout for read operations
+        socket.setKeepAlive(true);  // Enable TCP keep-alive
+    }
+
 
     // Initiates the gossip protocol
     void startGossiping() {
@@ -236,6 +248,17 @@ public class NetworkManager {
                     .forEach(peerInfo -> {
                         System.out.println("Updating connection status for peer " + peerIp + " to " + status);
                         peerInfo.setConnected(status);
+                    });
+        }
+    }
+
+    public void updatePeerSocket(String peerIp, Socket socket) {
+        synchronized (peers) {
+            peers.values().stream()
+                    .filter(peerInfo -> peerInfo.getIpAddress().equals(peerIp))
+                    .forEach(peerInfo -> {
+                        System.out.println("Updating socket for peer " + peerIp + " to " + socket);
+                        peerInfo.setSocket(socket);
                     });
         }
     }

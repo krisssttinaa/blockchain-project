@@ -61,24 +61,26 @@ public class Node implements Runnable {
         log("Node thread started.");
         try {
             String receivedMessage;
+            // Continuous listening without timeout
             while (connected && (receivedMessage = input.readLine()) != null) {
                 log("Received message: " + receivedMessage);
                 Message receivedMsg = gson.fromJson(receivedMessage, Message.class);
                 if (!publicKeyExchanged) {
+                    // Handle public key exchange before anything else
                     if (receivedMsg.getType() == MessageType.PUBLIC_KEY_EXCHANGE) {
                         handlePublicKeyExchange(receivedMsg);
                     } else {
                         log("Public key not exchanged yet with " + peerIp + ". Ignoring message of type: " + receivedMsg.getType());
                     }
                 } else {
+                    // Handle messages after public key exchange
                     handleNetworkMessage(receivedMsg);
                 }
             }
         } catch (IOException e) {
-            log("Failed to read message from " + peerIp + ": " + e.getMessage());
-            connected = false;
-            // Handle disconnection
-            // removePeerInfo();
+            // If an IOException occurs, mark the peer as disconnected
+            //log("Failed to read message from " + peerIp + ": " + e.getMessage());
+            //handleDisconnection();
         }
     }
 
@@ -218,15 +220,53 @@ public class Node implements Runnable {
         });
     }
 
-    private void sendMessage(Message message) {
-        String messageJson = gson.toJson(message);
-        output.println(messageJson);
+
+    // Method to mark the peer as disconnected without removing it
+    private void markPeerAsDisconnected() {
+        connected = false;
+        log("Marking peer as disconnected: " + peerIp);
+
+        // Update PeerInfo to reflect disconnection
+        networkManager.updatePeerConnectionStatus(peerIp, false);  // Mark as disconnected
+        networkManager.updatePeerSocket(peerIp, null);             // Remove the socket reference
+
+        // Optionally notify the peer before closing the socket, if feasible
+        try {
+            sendMessage(new Message(MessageType.DISCONNECT, "Disconnecting from peer: " + peerIp));
+            socket.close(); // Close the socket
+        } catch (IOException e) {
+            log("Failed to close socket gracefully: " + e.getMessage());
+        }
     }
 
+
+    // Update sendMessage to ensure messages are sent properly
+    private void sendMessage(Message message) {
+        if (socket != null && !socket.isClosed() && output != null) {
+            String messageJson = gson.toJson(message);
+            output.println(messageJson);
+        } else {
+            System.err.println("Socket is closed, can't send message to " + peerIp);
+        }
+    }
+
+
     private void storePeerInfo(String incomingPublicKeyString) {
-        PeerInfo peerInfo = new PeerInfo(peerIp, socket, true); // Initialize with the socket and connected status
-        networkManager.getPeers().putIfAbsent(incomingPublicKeyString, peerInfo);
-        log("Stored peer info: " + incomingPublicKeyString + " with IP: " + peerIp);
+        synchronized (networkManager.getPeers()) {
+            PeerInfo peerInfo = networkManager.getPeers().get(incomingPublicKeyString);
+
+            if (peerInfo == null) {
+                // Create new PeerInfo if it doesn't exist
+                peerInfo = new PeerInfo(peerIp, socket, true);
+                networkManager.getPeers().put(incomingPublicKeyString, peerInfo);
+                log("Stored new peer info: " + incomingPublicKeyString + " with IP: " + peerIp);
+            } else {
+                // If PeerInfo exists, just update the socket and connection status
+                peerInfo.setSocket(socket);
+                peerInfo.setConnected(true);
+                log("Updated existing peer info: " + incomingPublicKeyString + " with new socket.");
+            }
+        }
     }
 
     private void removePeerInfo() {
