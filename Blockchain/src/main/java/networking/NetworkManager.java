@@ -1,5 +1,6 @@
 package networking;
 
+import blockchain.Block;
 import blockchain.Blockchain;
 import blockchain.StringUtil;
 import com.google.gson.Gson;
@@ -8,7 +9,6 @@ import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.SocketException;
 import java.security.PublicKey;
 import java.util.Map;
 import java.util.Optional;
@@ -53,15 +53,29 @@ public class NetworkManager {
         });
     }
 
-    // Utility method to get the local IP address
-    private String getLocalIPAddress() {
-        try {
-            return InetAddress.getLocalHost().getHostAddress();
-        } catch (IOException e) {
-            System.err.println("Failed to get local IP address: " + e.getMessage());
-            return "Unknown IP";
-        }
+    public void broadcastNewBlock(Block block) {
+        String blockJson = gson.toJson(block); // Serialize the block to JSON
+        Message blockMessage = new Message(MessageType.NEW_BLOCK, blockJson); // Create a message for block propagation
+
+        // Broadcast the new block message to all connected peers
+        broadcastMessage(blockMessage);
     }
+
+    // Broadcast message to all peers except the original sender
+    public void broadcastMessageExceptSender(Message message, String senderIp) {
+        peers.forEach((publicKey, peerInfo) -> {
+            // Avoid sending the message back to the original sender
+            if (!peerInfo.getIpAddress().equals(senderIp) && peerInfo.isConnected()) {
+                try {
+                    sendMessageToPeer(peerInfo.getSocket(), message); // Send the message to other peers
+                } catch (IOException e) {
+                    System.err.println("Failed to send message to peer " + peerInfo.getIpAddress() + ": " + e.getMessage());
+                    peerInfo.setConnected(false); // Mark the peer as disconnected if there was an issue
+                }
+            }
+        });
+    }
+
 
     private void handleNewConnection(Socket socket) {
         String peerIp = socket.getInetAddress().getHostAddress();
@@ -107,9 +121,7 @@ public class NetworkManager {
                 try {
                     System.out.println("Attempting to connect to peer: " + address + " on port: " + port + " (Attempt " + (attempts + 1) + ")");
                     Socket socket = new Socket(address, port);
-
-                    // Configure socket options (timeout, keep-alive)
-                    configureSocket(socket);
+                    socket.setKeepAlive(true);  // Enable TCP keep-alive
 
                     synchronized (peers) {
                         // Double-check after creating the socket if the peer was connected in the meantime
@@ -152,12 +164,6 @@ public class NetworkManager {
             }
         });
     }
-
-    private void configureSocket(Socket socket) throws SocketException {
-        //socket.setSoTimeout(30000); // Set a 30-second timeout for read operations
-        socket.setKeepAlive(true);  // Enable TCP keep-alive
-    }
-
 
     // Initiates the gossip protocol
     void startGossiping() {
@@ -266,13 +272,18 @@ public class NetworkManager {
     public PublicKey getLocalPublicKey() {
         return localPublicKey;
     }
-
     public Map<String, PeerInfo> getPeers() {
         return peers;
     }
+    public PublicKey getPeerPublicKey(Socket socket) {return StringUtil.getKeyFromString(socket.getInetAddress().getHostAddress());}
 
-    public PublicKey getPeerPublicKey(Socket socket) {
-        return StringUtil.getKeyFromString(socket.getInetAddress().getHostAddress());
+    // Utility method to get the local IP address
+    private String getLocalIPAddress() {
+        try {
+            return InetAddress.getLocalHost().getHostAddress();
+        } catch (IOException e) {
+            System.err.println("Failed to get local IP address: " + e.getMessage());
+            return "Unknown IP";
+        }
     }
-
 }

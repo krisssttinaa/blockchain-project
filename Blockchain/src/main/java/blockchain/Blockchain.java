@@ -54,20 +54,6 @@ public class Blockchain {
         System.out.println("Checkpoint saved at block " + lastCheckpoint);
     }
 
-    // Method to create a new block from unconfirmed transactions and add it to the chain
-    public void createAndAddBlock() {
-        if (!unconfirmedTransactions.isEmpty()) {
-            Block newBlock = new Block(chain.size(), chain.get(chain.size() - 1).getHash());
-            newBlock.getTransactions().addAll(unconfirmedTransactions); // Add all unconfirmed transactions to the new block
-            if (addAndValidateBlock(newBlock)) {
-                System.out.println("Block added to the blockchain");
-                // Broadcast this new block to other peers (if applicable)
-            } else {
-                System.out.println("Failed to add new block to the blockchain");
-            }
-        }
-    }
-
     // Add this method to calculate the cumulative difficulty
     public long calculateCumulativeDifficulty() {
         long cumulativeDifficulty = 0;
@@ -110,20 +96,6 @@ public class Blockchain {
         } else {
             System.out.println("Transaction failed to process.");
             return false;
-        }
-    }
-
-    // Method to create and add a new block with transactions from the pool
-    public void addBlockFromPool() {
-        // Assuming your Block constructor takes a list of transactions
-        Block newBlock = new Block(chain.size(), getLastBlock().getHash(), new ArrayList<>(unconfirmedTransactions));
-
-        // Assuming you have a method to add and validate a block
-        if (addAndValidateBlock(newBlock)) {
-            System.out.println("New block added to the blockchain.");
-            unconfirmedTransactions.clear(); // Clear the pool once transactions are confirmed in a block
-        } else {
-            System.out.println("Block failed to add.");
         }
     }
 
@@ -235,5 +207,26 @@ public class Blockchain {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    // Create a block when the unconfirmed transaction pool reaches a certain size
+    public Block minePendingTransactions(int numTransactionsToMine) {
+        if (unconfirmedTransactions.size() >= numTransactionsToMine) {
+            System.out.println("Mining a new block with pending transactions...");
+            List<Transaction> transactionsToMine = new ArrayList<>( // Get only the transactions needed for this block
+                    unconfirmedTransactions.subList(0, numTransactionsToMine)
+            );
+
+            // Create a new block with those transactions
+            Block newBlock = new Block(chain.size(), chain.get(chain.size() - 1).getHash(), transactionsToMine);
+            if (addAndValidateBlock(newBlock)) { // Add and validate the block
+                System.out.println("Block added to the blockchain");
+                unconfirmedTransactions.removeAll(transactionsToMine); // Remove only the mined transactions from the pool
+                return newBlock;
+            } else {
+                System.out.println("Failed to add new block to the blockchain");
+            }
+        }
+        return null;
     }
 }
