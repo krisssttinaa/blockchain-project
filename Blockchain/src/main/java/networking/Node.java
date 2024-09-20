@@ -1,41 +1,40 @@
 package networking;
 
-import blockchain.Block;
-import blockchain.Blockchain;
-import blockchain.StringUtil;
-import blockchain.Transaction;
+import blockchain.*;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
-import java.security.PublicKey;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import static blockchain.Main.NODE_PORT;
 
 public class Node implements Runnable {
-    // Static counter to generate unique IDs for each Node instance
-    private static final AtomicInteger idCounter = new AtomicInteger(0);
+    private static final AtomicInteger idCounter = new AtomicInteger(0); // Unique ID generator for nodes
     private final int nodeId;
     private final Socket socket;
     private final Blockchain blockchain;
     private final NetworkManager networkManager;
     private BufferedReader input;
     private PrintWriter output;
-    private final Gson gson = new Gson();
+    private final Gson gson = new Gson(); // Use standard Gson since we're using Strings for public keys
     private final String peerIp;
-    private PublicKey peerPublicKey;
-    private boolean connected = true; // To track the connection status
-    private boolean publicKeyExchanged = false; // To ensure public keys are exchanged before proceeding
-    private int numTranasctionsToMine = 2; // Number of transactions to mine a block
+    private String peerPublicKey; // Store peer's public key as a string
+    private boolean connected = true; // Track connection status
+    private boolean publicKeyExchanged = false; // Ensure public keys are exchanged
+    private int numTransactionsToMine = 2; // Number of transactions needed to mine a block
+    private static final int LRU_CACHE_SIZE = 10000; // Define a reasonable size for the cache
+    //private LRUCache<String, Boolean> receivedTransactions = new LRUCache<>(LRU_CACHE_SIZE); // LRU cache to track received transactions
 
     public Node(Socket socket, Blockchain blockchain, NetworkManager networkManager) {
-        // Assign a unique ID to each Node instance
         this.nodeId = idCounter.incrementAndGet();
-
         this.socket = socket;
         this.blockchain = blockchain;
         this.networkManager = networkManager;
@@ -45,8 +44,8 @@ public class Node implements Runnable {
             this.input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             this.output = new PrintWriter(socket.getOutputStream(), true);
 
-            // Send our public key first
-            String localPublicKeyString = StringUtil.getStringFromKey(networkManager.getLocalPublicKey());
+            // Send our public key (now a string) first
+            String localPublicKeyString = networkManager.getLocalPublicKey();
             log("Sending public key: " + localPublicKeyString);
             sendMessage(new Message(MessageType.PUBLIC_KEY_EXCHANGE, localPublicKeyString));
 
@@ -61,37 +60,32 @@ public class Node implements Runnable {
         log("Node thread started.");
         try {
             String receivedMessage;
-            // Continuous listening without timeout
             while (connected && (receivedMessage = input.readLine()) != null) {
                 log("Received message: " + receivedMessage);
                 Message receivedMsg = gson.fromJson(receivedMessage, Message.class);
                 if (!publicKeyExchanged) {
-                    // Handle public key exchange before anything else
                     if (receivedMsg.getType() == MessageType.PUBLIC_KEY_EXCHANGE) {
                         handlePublicKeyExchange(receivedMsg);
                     } else {
                         log("Public key not exchanged yet with " + peerIp + ". Ignoring message of type: " + receivedMsg.getType());
                     }
                 } else {
-                    // Handle messages after public key exchange
                     handleNetworkMessage(receivedMsg);
                 }
             }
         } catch (IOException e) {
-            // If an IOException occurs, mark the peer as disconnected
-            //log("Failed to read message from " + peerIp + ": " + e.getMessage());
-            //handleDisconnection();
+            log("Failed to read message from " + peerIp + ": " + e.getMessage());
+            handleDisconnection();
         }
     }
 
     private void handlePublicKeyExchange(Message message) {
-        String peerPublicKeyString = message.getData();
-        this.peerPublicKey = StringUtil.getKeyFromString(peerPublicKeyString);
+        this.peerPublicKey = message.getData(); // Store peer's public key as a string
         publicKeyExchanged = true;
-        storePeerInfo(peerPublicKeyString);
+        storePeerInfo(peerPublicKey); // Store peer info in the network manager
         log("Public key exchanged with peer: " + peerIp);
 
-        // Send back an acknowledgment or a message indicating the connection is fully established
+        // Acknowledge the connection
         sendMessage(new Message(MessageType.CONNECTION_ESTABLISHED, "Connection established with peer: " + peerIp));
     }
 
@@ -113,46 +107,30 @@ public class Node implements Runnable {
     private void handleConnectionEstablished() {
         synchronized (networkManager.getPeers()) {
             log("Handling connection established with peer: " + peerIp);
-            log("Before updating, isConnected status for peer " + peerIp + ": " + isPeerConnected());
-            // Update connection status
             networkManager.updatePeerConnectionStatus(peerIp, true);
-            log("After updating, isConnected status for peer " + peerIp + ": " + isPeerConnected());
             log("Connection fully established with peer: " + peerIp);
         }
-    }
-
-    private boolean isPeerConnected() {
-        return networkManager.getPeers().values().stream()
-                .filter(peerInfo -> peerInfo.getIpAddress().equals(peerIp))
-                .map(PeerInfo::isConnected)
-                .findFirst()
-                .orElse(false);
     }
 
     private void handleSharePeerList(Message receivedMsg) {
         log("Received gossip from peer: " + peerIp);
         ConcurrentHashMap<String, PeerInfo> receivedPeers = gson.fromJson(receivedMsg.getData(), new TypeToken<ConcurrentHashMap<String, PeerInfo>>(){}.getType());
 
-        String localPublicKeyString = StringUtil.getStringFromKey(networkManager.getLocalPublicKey());
+        String localPublicKeyString = networkManager.getLocalPublicKey();
 
         receivedPeers.forEach((publicKey, peerInfo) -> {
-            // Avoid adding self or existing peers unless the new info is more reliable
             if (!publicKey.equals(localPublicKeyString)) {
                 networkManager.getPeers().compute(publicKey, (key, existingPeerInfo) -> {
                     if (existingPeerInfo == null) {
                         log("New peer added (disconnected): " + publicKey + " with IP: " + peerInfo.getIpAddress());
-                        // Try to connect to the newly discovered peer
                         networkManager.connectToPeer(peerInfo.getIpAddress(), NODE_PORT);
                         return new PeerInfo(peerInfo.getIpAddress(), false);
-                    } else {
-                        // Keep the existing peer if it's already connected or if the current peer info is more accurate
-                        if (!existingPeerInfo.isConnected() && peerInfo.isConnected()) {
-                            log("Updating peer info with better connection state: " + publicKey);
-                            networkManager.connectToPeer(peerInfo.getIpAddress(), NODE_PORT);
-                            return new PeerInfo(peerInfo.getIpAddress(), true);
-                        }
-                        return existingPeerInfo;
+                    } else if (!existingPeerInfo.isConnected() && peerInfo.isConnected()) {
+                        log("Updating peer info with better connection state: " + publicKey);
+                        networkManager.connectToPeer(peerInfo.getIpAddress(), NODE_PORT);
+                        return new PeerInfo(peerInfo.getIpAddress(), true);
                     }
+                    return existingPeerInfo;
                 });
             }
         });
@@ -160,34 +138,48 @@ public class Node implements Runnable {
     }
 
     private void handleNewTransaction(Message receivedMsg) {
-        Transaction transaction = gson.fromJson(receivedMsg.getData(), Transaction.class); // Deserialize the received transaction
-        // Add the transaction to the blockchain's unconfirmed transaction pool if it's valid
-        if (blockchain.addTransaction(transaction)) {
-            log("Transaction validated and added to pool. Re-broadcasting...");
-            networkManager.broadcastMessage(receivedMsg);// Re-broadcast the transaction to other peers
+        log("Received NEW_TRANSACTION message.");
 
-            // Mine pending transactions if there are enough to create a block
-            Block newBlock = blockchain.minePendingTransactions(numTranasctionsToMine);
-            if (newBlock != null) {
-                log("New block mined successfully.");
-                log("Broadcasting newly mined block...");
-                networkManager.broadcastNewBlock(newBlock);
+        try {
+            // Deserialize the transaction from JSON
+            Transaction transaction = gson.fromJson(receivedMsg.getData(), Transaction.class);
+
+            // Check if this transaction has already been processed using the shared LRU cache
+            if (Main.receivedTransactions.containsKey(transaction.transactionId)) {
+                log("Transaction " + transaction.transactionId + " already processed. Ignoring...");
+                return; // Ignore if we've already seen this transaction
             }
-        } else {
-            log("Transaction validation failed for transaction from " + peerIp + ".");
+
+            log("Transaction deserialized successfully: " + transaction);
+
+            // Process the transaction and add it to the shared LRU cache
+            if (blockchain.addTransaction(transaction)) {
+                log("Transaction validated and added to pool.");
+                Main.receivedTransactions.put(transaction.transactionId, Boolean.TRUE); // Track the transaction globally
+
+                // Rebroadcast the transaction to peers, excluding the sender
+                networkManager.broadcastMessageExceptSender(receivedMsg, peerIp);
+
+                // Optionally, mine pending transactions
+                Block newBlock = blockchain.minePendingTransactions(numTransactionsToMine);
+                if (newBlock != null) {
+                    log("New block mined successfully. Broadcasting...");
+                    networkManager.broadcastNewBlock(newBlock);
+                }
+            } else {
+                log("Transaction validation failed for transaction from " + peerIp + ".");
+            }
+        } catch (Exception e) {
+            log("Error deserializing transaction: " + e.getMessage());
         }
     }
 
     private void handleNewBlock(Message receivedMsg) {
-        // Deserialize the received block from the message
         Block receivedBlock = gson.fromJson(receivedMsg.getData(), Block.class);
 
-        // Attempt to validate and add the block to the chain
         if (blockchain.addAndValidateBlock(receivedBlock)) {
             log("Block validated and added to the chain.");
-
-            // Broadcast the block to other peers, excluding the sender
-            networkManager.broadcastMessageExceptSender(receivedMsg, peerIp); // Avoid broadcasting to the sender again
+            networkManager.broadcastMessageExceptSender(receivedMsg, peerIp); // Broadcast to others except sender
         } else {
             log("Block validation failed for block from " + peerIp + ".");
         }
@@ -223,7 +215,6 @@ public class Node implements Runnable {
         });
     }
 
-    // Update sendMessage to ensure messages are sent properly
     private void sendMessage(Message message) {
         if (socket != null && !socket.isClosed() && output != null) {
             String messageJson = gson.toJson(message);
@@ -238,12 +229,10 @@ public class Node implements Runnable {
             PeerInfo peerInfo = networkManager.getPeers().get(incomingPublicKeyString);
 
             if (peerInfo == null) {
-                // Create new PeerInfo if it doesn't exist
                 peerInfo = new PeerInfo(peerIp, socket, true);
                 networkManager.getPeers().put(incomingPublicKeyString, peerInfo);
                 log("Stored new peer info: " + incomingPublicKeyString + " with IP: " + peerIp);
             } else {
-                // If PeerInfo exists, just update the socket and connection status
                 peerInfo.setSocket(socket);
                 peerInfo.setConnected(true);
                 log("Updated existing peer info: " + incomingPublicKeyString + " with new socket.");
@@ -251,29 +240,18 @@ public class Node implements Runnable {
         }
     }
 
-    // Log with the node ID for easier tracking
+    private void handleDisconnection() {
+        connected = false;
+        log("Handling disconnection from " + peerIp);
+        networkManager.updatePeerConnectionStatus(peerIp, false);
+        try {
+            socket.close();
+        } catch (IOException e) {
+            log("Failed to close socket: " + e.getMessage());
+        }
+    }
+
     private void log(String message) {
         System.out.println("Node-" + nodeId + ": " + message);
-    }
-    private void removePeerInfo() {
-        networkManager.getPeers().remove(StringUtil.getStringFromKey(peerPublicKey));
-        log("Removed peer info: " + peerIp + " due to disconnection.");
-    }
-    // Method to mark the peer as disconnected without removing it
-    private void markPeerAsDisconnected() {
-        connected = false;
-        log("Marking peer as disconnected: " + peerIp);
-
-        // Update PeerInfo to reflect disconnection
-        networkManager.updatePeerConnectionStatus(peerIp, false);  // Mark as disconnected
-        networkManager.updatePeerSocket(peerIp, null);             // Remove the socket reference
-
-        // Optionally notify the peer before closing the socket, if feasible
-        try {
-            sendMessage(new Message(MessageType.DISCONNECT, "Disconnecting from peer: " + peerIp));
-            socket.close(); // Close the socket
-        } catch (IOException e) {
-            log("Failed to close socket gracefully: " + e.getMessage());
-        }
     }
 }

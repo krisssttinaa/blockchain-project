@@ -6,7 +6,6 @@ import networking.MessageType;
 import networking.NetworkManager;
 import networking.PeerInfo;
 
-import java.security.PublicKey;
 import java.util.Map;
 import java.util.Scanner;
 
@@ -57,7 +56,6 @@ public class BlockchainCLI {
             return;
         }
 
-        // User selects a peer to send the transaction to
         System.out.println("Choose a recipient:");
         int i = 1;
         for (Map.Entry<String, PeerInfo> entry : peers.entrySet()) {
@@ -76,20 +74,15 @@ public class BlockchainCLI {
         }
 
         String selectedPublicKey = (String) peers.keySet().toArray()[choice - 1];
-        PublicKey recipient = StringUtil.getKeyFromString(selectedPublicKey);
 
         System.out.print("Enter amount to send: ");
         float amount = scanner.nextFloat();
 
         try {
-            Transaction transaction = senderWallet.sendFunds(recipient, amount);
+            Transaction transaction = senderWallet.sendFunds(selectedPublicKey, amount);
             if (transaction != null) {
                 System.out.println("Transaction created and broadcasted.");
-
-                // Propagate the transaction immediately
                 networkManager.broadcastMessage(new Message(MessageType.NEW_TRANSACTION, new Gson().toJson(transaction)));
-
-                // Optionally: add the transaction to the local pool for mining later
                 blockchain.addTransaction(transaction);
             } else {
                 System.out.println("Transaction failed.");

@@ -1,23 +1,24 @@
 package blockchain;
-import java.security.PublicKey;
 
 public class TransactionOutput {
     public String id;
-    public PublicKey recipient; // new owner of these coins
-    public float value; // amount of coins they own
+    public String recipient; // recipient address as a string (previously PublicKey)
+    public float value; // amount of coins
     public String parentTransactionId; // id of the transaction this output was created in
 
-    public TransactionOutput(PublicKey recipient, float value, String parentTransactionId) {
+    public TransactionOutput(String recipient, float value, String parentTransactionId) {
         this.recipient = recipient;
         this.value = value;
         this.parentTransactionId = parentTransactionId;
-        this.id = StringUtil.applySha256(StringUtil.getStringFromKey(recipient) + Float.toString(value) + parentTransactionId);
+        this.id = StringUtil.applySha256(recipient + Float.toString(value) + parentTransactionId);
     }
 
-    // Check if coin belongs to you
-    public boolean isMine(PublicKey publicKey) {
-        return (publicKey.equals(recipient));
+    // Check if the coin belongs to the provided public key
+    public boolean isMine(String publicKey) {
+        return publicKey.equals(recipient);
     }
 
-    public String getId() {return id;}
+    public String getId() {
+        return id;
+    }
 }

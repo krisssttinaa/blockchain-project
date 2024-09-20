@@ -1,49 +1,49 @@
 package blockchain;
-import java.security.*;
+
+import java.security.PrivateKey;
 import java.util.ArrayList;
 import java.util.List;
 
 import static blockchain.Main.unconfirmedTransactions;
 
 public class Transaction {
-    public String transactionId; //unique identifier for the transaction, hash of the transaction's contents
-    public PublicKey sender; //public key/address
-    public PublicKey recipient;
-    public float value; //the amount of coins to send
-    public byte[] signature; //prevent anybody else from spending funds in our wallet
-    public List<TransactionInput> inputs; //Inputs refer to previous transaction outputs that are being spent, and outputs create new unspent transaction outputs
-    public List<TransactionOutput> outputs = new ArrayList<>();
-    private static int sequence = 0; //count of how many transactions have been generated, to ensure uniqueness of transactions by incrementing its value for each transaction
+    public String transactionId; // unique identifier for the transaction, hash of the transaction's contents
+    public String sender; // sender address as a string (previously PublicKey)
+    public String recipient; // recipient address as a string (previously PublicKey)
+    public float value; // amount of coins to send
+    public byte[] signature; // prevents others from spending funds in the sender's wallet
+    public List<TransactionInput> inputs; // previous transaction outputs being used as inputs
+    public List<TransactionOutput> outputs = new ArrayList<>(); // outputs created by this transaction
+    private static int sequence = 0; // to ensure transaction uniqueness
 
-    public Transaction(PublicKey from, PublicKey to, float value, List<TransactionInput> inputs) {
+    public Transaction(String from, String to, float value, List<TransactionInput> inputs) {
         this.sender = from;
         this.recipient = to;
         this.value = value;
         this.inputs = inputs;
     }
 
-    // This Calculates the transaction hash (which will be used as its Id)
-    private String calculateHash() {
-        sequence++; //increase the sequence to avoid 2 identical transactions having the same hash
+    // Calculates the transaction hash (used as transactionId)
+    public String calculateHash() {
+        sequence++; // ensure uniqueness
         return StringUtil.applySha256(
-                StringUtil.getStringFromKey(sender) +
-                        StringUtil.getStringFromKey(recipient) + Float.toString(value) + sequence);
+                sender + recipient + Float.toString(value) + sequence
+        );
     }
 
-    //Signs all the data we dont wish to be tampered with, generates a digital signature for the transaction using the sender's private key
+    // Generates a signature using the sender's private key
     public void generateSignature(PrivateKey privateKey) {
-        //the sender, recipient, and value, which will be signed by the sender's private key
-        String data = StringUtil.getStringFromKey(sender) + StringUtil.getStringFromKey(recipient) + Float.toString(value) ;
-        signature = StringUtil.applyECDSASig(privateKey,data); //generates signature
+        String data = sender + recipient + Float.toString(value);
+        signature = StringUtil.applyECDSASig(privateKey, data); // generate signature
     }
 
-    //Verifies that the transaction's signature is valid and matches the data signed by the sender's private key
+    // Verifies the transaction signature to ensure it was signed by the owner of the sender's private key
     public boolean verifySignature() {
-        String data = StringUtil.getStringFromKey(sender) + StringUtil.getStringFromKey(recipient) + Float.toString(value) ;
-        return StringUtil.verifyECDSASig(sender, data, signature); //Verifies the signature using the sender's public key.
+        String data = sender + recipient + Float.toString(value);
+        return StringUtil.verifyECDSASig(StringUtil.getKeyFromString(sender), data, signature); // verifies using sender's public key
     }
 
-    // Returns true if new transaction could be created
+    // Process the transaction, updating UTXOs and checking for validity
     public boolean processTransaction() {
         if (!verifySignature()) {
             System.out.println("#Transaction Signature failed to verify");
@@ -54,8 +54,8 @@ public class Transaction {
         float inputSum = 0;
         for (TransactionInput i : inputs) {
             i.UTXO = Main.UTXOs.get(i.transactionOutputId);
-            if (i.UTXO == null || !i.UTXO.isMine(this.sender)) {
-                System.out.println("#Referenced input on Transaction(" + transactionId + ") is Missing, Invalid, or does not belong to the sender");
+            if (i.UTXO == null || !i.UTXO.isMine(sender)) {
+                System.out.println("#Referenced input on Transaction(" + transactionId + ") is invalid or does not belong to the sender");
                 return false;
             }
             inputSum += i.UTXO.value;
@@ -73,40 +73,44 @@ public class Transaction {
             }
         }
 
-        // Check if transaction meets the minimum transaction value requirement
+        // Check if the transaction meets the minimum transaction value
         if (inputSum < Main.minimumTransaction) {
             System.out.println("#Transaction Inputs too small: " + inputSum);
             return false;
         }
 
-        // Calculate transaction hash
-        transactionId = calculateHash();
-
         // Generate transaction outputs
-        float leftOver = inputSum - value; // Calculate 'change'
-        outputs.add(new TransactionOutput(this.recipient, value, transactionId)); // Value to recipient
-        outputs.add(new TransactionOutput(this.sender, leftOver, transactionId)); // 'Change' back to sender
+        transactionId = calculateHash();
+        float leftOver = inputSum - value; // Calculate the change
+        outputs.add(new TransactionOutput(recipient, value, transactionId)); // Send value to recipient
+        outputs.add(new TransactionOutput(sender, leftOver, transactionId)); // Send the leftover back to sender
 
         // Update UTXOs
-        for (TransactionOutput o : outputs) {Main.UTXOs.put(o.id, o);}
-        for (TransactionInput i : inputs) {Main.UTXOs.remove(i.UTXO.id);}
+        for (TransactionOutput o : outputs) {
+            Main.UTXOs.put(o.id, o);
+        }
+        for (TransactionInput i : inputs) {
+            if (i.UTXO != null) {
+                Main.UTXOs.remove(i.UTXO.id);
+            }
+        }
         return true;
     }
 
-    //returns sum of inputs(UTXOs) values
+    // Returns the total value of inputs (UTXOs) in the transaction
     public float getInputsValue() {
         float total = 0;
-        for(TransactionInput i : inputs) {
-            if(i.UTXO == null) continue; //if Transaction can't be found skip it, this should not happen
+        for (TransactionInput i : inputs) {
+            if (i.UTXO == null) continue;
             total += i.UTXO.value;
         }
         return total;
     }
 
-    //returns sum of outputs
+    // Returns the total value of outputs in the transaction
     public float getOutputsValue() {
         float total = 0;
-        for(TransactionOutput o : outputs) {
+        for (TransactionOutput o : outputs) {
             total += o.value;
         }
         return total;
@@ -115,7 +119,19 @@ public class Transaction {
     public List<TransactionInput> getInputs() {
         return inputs;
     }
+
     public List<TransactionOutput> getOutputs() {
         return outputs;
+    }
+
+    @Override
+    public String toString() {
+        return "Transaction{" +
+                "sender='" + sender + '\'' +
+                ", recipient='" + recipient + '\'' +
+                ", value=" + value +
+                ", inputs=" + inputs +
+                ", outputs=" + outputs +
+                '}';
     }
 }

@@ -1,75 +1,72 @@
 package blockchain;
 
-import com.google.gson.GsonBuilder;
-
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-
-import static blockchain.Main.difficulty;
+import java.io.*;
+import java.util.*;
 
 public class Blockchain {
     private List<Block> chain;
-    public static HashMap<String, TransactionOutput> UTXOs = new HashMap<>();
-    private List<Transaction> unconfirmedTransactions; // A pool for unconfirmed transactions
-    private static final int CHECKPOINT_INTERVAL = 100;  // Save a checkpoint every 100 blocks
+    public static HashMap<String, TransactionOutput> UTXOs = new HashMap<>(); // UTXO pool
+    private List<Transaction> unconfirmedTransactions; // Unconfirmed transactions
+    private static final int CHECKPOINT_INTERVAL = 100;  // Interval for saving blockchain state
     private int lastCheckpoint = 0;
 
     public Blockchain() {
         this.chain = new ArrayList<>();
         this.unconfirmedTransactions = new ArrayList<>();
+
+        // Create the genesis block
         Block genesisBlock = new Block(0, "0");
         chain.add(genesisBlock);
     }
 
+    // Method for mining a block
     private void mineBlock(Block block, int difficulty) {
-        String target = StringUtil.getDifficultyString(difficulty); // Create a string with difficulty * "0"
+        String target = StringUtil.getDifficultyString(difficulty); // Difficulty target
         while (!block.getHash().substring(0, difficulty).equals(target)) {
-            block.incrementNonce(); // Increase nonce to change the hash
-            block.updateHash(); // Recalculate hash with the new nonce
+            block.incrementNonce(); // Increment nonce
+            block.updateHash(); // Recalculate hash
         }
     }
 
+    // Adding and validating a new block
     public boolean addAndValidateBlock(Block block) {
+        // Save checkpoint if the block index surpasses the checkpoint interval
         if (block.getIndex() > lastCheckpoint + CHECKPOINT_INTERVAL) {
             saveCheckpoint("checkpoint_" + block.getIndex() + ".dat");
             lastCheckpoint = block.getIndex();
         }
+
         Block lastBlock = chain.get(chain.size() - 1);
+        // Validate block's linkage to the previous block
         if (block.getPreviousHash().equals(lastBlock.getHash()) && block.getIndex() == lastBlock.getIndex() + 1) {
-            mineBlock(block, difficulty); // Mine the new block so it satisfies the difficulty level
-            chain.add(block); // Add to chain if it's valid
+            mineBlock(block, Main.difficulty); // Mine the block
+            chain.add(block); // Add block to the chain
             unconfirmedTransactions.clear(); // Clear unconfirmed transactions
             return true;
         }
         return false;
     }
 
+    // Save the blockchain state periodically
     private void saveCheckpoint(String filename) {
         saveBlockchain(filename);
         System.out.println("Checkpoint saved at block " + lastCheckpoint);
     }
 
-    // Add this method to calculate the cumulative difficulty
+    // Calculate the cumulative difficulty of the chain
     public long calculateCumulativeDifficulty() {
         long cumulativeDifficulty = 0;
         for (Block block : chain) {
-            // Difficulty here refers to the number of leading zeros, so 2^difficulty gives us a rough measure of the work done
-            cumulativeDifficulty += Math.pow(2, difficulty);
+            cumulativeDifficulty += Math.pow(2, Main.difficulty);
         }
         return cumulativeDifficulty;
     }
 
+    // Compare and replace the current blockchain with a more valid and difficult chain
     public void compareAndReplace(Blockchain newBlockchain) {
-        // Calculate the cumulative difficulty of both blockchains
         long currentDifficulty = calculateCumulativeDifficulty();
         long newDifficulty = newBlockchain.calculateCumulativeDifficulty();
 
-        // Replace if the new blockchain has a higher cumulative difficulty
         if (newBlockchain.isValidChain() && newDifficulty > currentDifficulty) {
             this.chain = new ArrayList<>(newBlockchain.chain);
             System.out.println("Blockchain has been replaced with a more difficult valid chain.");
@@ -78,16 +75,21 @@ public class Blockchain {
         }
     }
 
+    // Update UTXO pool after mining a block
     private void updateUTXOs(Block block) {
         for (Transaction transaction : block.getTransactions()) {
-            // For each transaction, remove spent UTXOs
-            transaction.getInputs().forEach(i -> UTXOs.remove(i.transactionOutputId));
+            // Remove spent UTXOs
+            for (TransactionInput input : transaction.getInputs()) {
+                UTXOs.remove(input.transactionOutputId);
+            }
             // Add new UTXOs
-            transaction.getOutputs().forEach(o -> UTXOs.put(o.id, o));
+            for (TransactionOutput output : transaction.getOutputs()) {
+                UTXOs.put(output.id, output);
+            }
         }
     }
 
-    // Method to add a transaction to the pool of unconfirmed transactions
+    // Add a transaction to the unconfirmed pool
     public boolean addTransaction(Transaction transaction) {
         if (transaction.processTransaction() && transaction.getInputsValue() >= Main.minimumTransaction) {
             unconfirmedTransactions.add(transaction);
@@ -99,12 +101,10 @@ public class Blockchain {
         }
     }
 
-    // Assuming you have a method to get the last block in the chain
-    private Block getLastBlock() {
-        return chain.size() > 0 ? chain.get(chain.size() - 1) : null;
-    }
+    // Get the last block in the chain
+    private Block getLastBlock() {return chain.size() > 0 ? chain.get(chain.size() - 1) : null;}
 
-    // Validate the integrity of the blockchain
+    // Validate the blockchain
     public boolean isValidChain() {
         if (chain.isEmpty()) {
             System.out.println("Blockchain is empty.");
@@ -112,82 +112,57 @@ public class Blockchain {
         }
 
         HashMap<String, TransactionOutput> tempUTXOs = new HashMap<>();
-        Block previousBlock = chain.get(0); // The first block in the chain is the genesis block
+        Block previousBlock = chain.get(0); // Genesis block
 
-        // Assuming the genesis block has at least one transaction to initialize UTXOs
+        // Initialize UTXOs from the genesis block's transactions
         for (TransactionOutput output : previousBlock.getTransactions().get(0).getOutputs()) {
             tempUTXOs.put(output.id, output);
         }
 
-        // Start from the second block (index 1) because the first block is the genesis block
         for (int i = 1; i < chain.size(); i++) {
             Block currentBlock = chain.get(i);
 
-            // Check current block hash
-            if (!currentBlock.getHash().equals(currentBlock.calculateHash())) {
-                System.out.println("Current Hashes are not equal.");
+            // Verify the current block's hash and previous hash
+            if (!currentBlock.getHash().equals(currentBlock.calculateHash()) ||
+                    !previousBlock.getHash().equals(currentBlock.getPreviousHash())) {
+                System.out.println("Block hashes are invalid.");
                 return false;
             }
 
-            // Check previous block hash
-            if (!previousBlock.getHash().equals(currentBlock.getPreviousHash())) {
-                System.out.println("Previous Hashes are not equal.");
-                return false;
-            }
-
-            // Check if the block is mined
-            if (!currentBlock.getHash().substring(0, difficulty).equals(StringUtil.getDifficultyString(difficulty))) {
-                System.out.println("This block hasn't been mined.");
-                return false;
-            }
-
-            // Validate all transactions in the current block
+            // Validate each transaction
             for (Transaction transaction : currentBlock.getTransactions()) {
                 if (!transaction.verifySignature()) {
                     System.out.println("Transaction signature is invalid.");
                     return false;
                 }
 
-                // Validate transaction inputs are unspent and belong to the sender
+                // Validate inputs and UTXOs
                 for (TransactionInput input : transaction.getInputs()) {
                     TransactionOutput tempOutput = tempUTXOs.get(input.transactionOutputId);
-
-                    if (tempOutput == null) {
-                        System.out.println("Referenced input on Transaction is Missing.");
-                        return false;
-                    }
-
-                    if (input.UTXO.value != tempOutput.value) {
-                        System.out.println("Referenced input Transaction value is Invalid.");
+                    if (tempOutput == null || input.UTXO.value != tempOutput.value) {
+                        System.out.println("Transaction input or value is invalid.");
                         return false;
                     }
                 }
 
-                // Update tempUTXOs with transactions outputs
-                transaction.getOutputs().forEach(output -> tempUTXOs.put(output.id, output));
+                // Update temp UTXOs with new transaction outputs
+                for (TransactionOutput output : transaction.getOutputs()) {
+                    tempUTXOs.put(output.id, output);
+                }
 
-                // Remove transaction inputs from tempUTXOs
+                // Remove inputs from temp UTXOs
                 for (TransactionInput input : transaction.getInputs()) {
                     tempUTXOs.remove(input.transactionOutputId);
                 }
             }
+
             previousBlock = currentBlock;
         }
         System.out.println("Blockchain is valid.");
         return true;
     }
 
-    public void printChain() {
-        String blockchainJson = new GsonBuilder().setPrettyPrinting().create().toJson(chain);
-        System.out.println("The block chain: ");
-        System.out.println(blockchainJson);
-    }
-
-    public Block getLatestBlock() {
-        return chain.get(chain.size() - 1);
-    }
-
-    // Save the blockchain and UTXO set to a file
+    // Save the blockchain to disk
     public void saveBlockchain(String filename) {
         try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(filename))) {
             out.writeObject(this.chain);
@@ -198,7 +173,7 @@ public class Blockchain {
         }
     }
 
-    // Load the blockchain and UTXO set from a file
+    // Load the blockchain from disk
     public void loadBlockchain(String filename) {
         try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(filename))) {
             this.chain = (List<Block>) in.readObject();
@@ -209,24 +184,29 @@ public class Blockchain {
         }
     }
 
-    // Create a block when the unconfirmed transaction pool reaches a certain size
+    // Mine pending transactions when the pool reaches a threshold
     public Block minePendingTransactions(int numTransactionsToMine) {
         if (unconfirmedTransactions.size() >= numTransactionsToMine) {
             System.out.println("Mining a new block with pending transactions...");
-            List<Transaction> transactionsToMine = new ArrayList<>( // Get only the transactions needed for this block
-                    unconfirmedTransactions.subList(0, numTransactionsToMine)
-            );
+            List<Transaction> transactionsToMine = new ArrayList<>(unconfirmedTransactions.subList(0, numTransactionsToMine));
 
-            // Create a new block with those transactions
+            // Create a new block with pending transactions
             Block newBlock = new Block(chain.size(), chain.get(chain.size() - 1).getHash(), transactionsToMine);
-            if (addAndValidateBlock(newBlock)) { // Add and validate the block
+            if (addAndValidateBlock(newBlock)) {
                 System.out.println("Block added to the blockchain");
-                unconfirmedTransactions.removeAll(transactionsToMine); // Remove only the mined transactions from the pool
+                unconfirmedTransactions.removeAll(transactionsToMine); // Remove only the mined transactions
                 return newBlock;
             } else {
-                System.out.println("Failed to add new block to the blockchain");
+                System.out.println("Failed to add new block to the blockchain.");
             }
         }
         return null;
+    }
+
+    public void printChain() {
+        for (Block block : chain) {
+            System.out.println(block);
+            System.out.println();
+        }
     }
 }

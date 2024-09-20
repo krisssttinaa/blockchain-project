@@ -1,4 +1,5 @@
 package blockchain;
+import java.security.PublicKey;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -25,6 +26,7 @@ public class Block {
         this.hash = calculateHash();
     }
 
+    // Calculate hash for the block (without Merkle Root)
     public String calculateHash() {
         if (index == 0) {
             hash = StringUtil.applySha256("The Times 03/Jan/2009 Chancellor on brink of second bailout for banks");
@@ -42,7 +44,7 @@ public class Block {
     public boolean addTransaction(Transaction transaction) {
         if(transaction == null) return false;
 
-        // If we're not adding the genesis block, process the transaction
+        // Process the transaction unless it's the genesis block
         if((!"0".equals(previousHash))) {
             if(!transaction.processTransaction()) {
                 System.out.println("Transaction failed to process. Discarded.");
@@ -55,7 +57,15 @@ public class Block {
         return true;
     }
 
-    // New method to recalculate the block's hash
+    // Add coinbase transaction (miner reward)
+    public void addCoinbaseTransaction(String minerAddress, float reward) {
+        CoinbaseTransaction rewardTx = new CoinbaseTransaction(minerAddress, reward);
+        rewardTx.processTransaction();
+        transactions.add(rewardTx);
+    }
+
+
+    // Recalculate the block's hash
     public void updateHash() {
         this.hash = calculateHash(); // Recalculate hash with the current nonce value
     }
@@ -66,10 +76,10 @@ public class Block {
     }
 
     // Getters
-    public int getIndex() {return index;}
-    public String getPreviousHash() {return previousHash;}
-    public long getTimestamp() {return timestamp;}
-    public String getHash() {return hash;}
-    public List<Transaction> getTransactions() {return transactions;}
-    public int getNonce() {return nonce;}
+    public int getIndex() { return index; }
+    public String getPreviousHash() { return previousHash; }
+    public long getTimestamp() { return timestamp; }
+    public String getHash() { return hash; }
+    public List<Transaction> getTransactions() { return transactions; }
+    public int getNonce() { return nonce; }
 }

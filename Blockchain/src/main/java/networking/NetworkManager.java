@@ -61,7 +61,6 @@ public class NetworkManager {
         broadcastMessage(blockMessage);
     }
 
-    // Broadcast message to all peers except the original sender
     public void broadcastMessageExceptSender(Message message, String senderIp) {
         peers.forEach((publicKey, peerInfo) -> {
             // Avoid sending the message back to the original sender
@@ -75,6 +74,7 @@ public class NetworkManager {
             }
         });
     }
+
 
 
     private void handleNewConnection(Socket socket) {
@@ -269,9 +269,7 @@ public class NetworkManager {
         }
     }
 
-    public PublicKey getLocalPublicKey() {
-        return localPublicKey;
-    }
+    public String getLocalPublicKey() {return StringUtil.getStringFromKey(localPublicKey);}
     public Map<String, PeerInfo> getPeers() {
         return peers;
     }
