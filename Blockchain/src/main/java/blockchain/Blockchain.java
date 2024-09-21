@@ -1,12 +1,18 @@
 package blockchain;
 
+import com.google.gson.GsonBuilder;
+
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Blockchain {
     private List<Block> chain;
     public static HashMap<String, TransactionOutput> UTXOs = new HashMap<>(); // UTXO pool
     private List<Transaction> unconfirmedTransactions; // Unconfirmed transactions
+    // Fixed size to track only the most recent block hashes
+    private static final int MAX_HASH_COUNT = 300;  // Keep only the last 300 block hashes
+    private Deque<String> receivedBlockHashes = new ArrayDeque<>(); // Track recent block hashes
     private static final int CHECKPOINT_INTERVAL = 100;  // Interval for saving blockchain state
     private int lastCheckpoint = 0;
 
@@ -17,10 +23,14 @@ public class Blockchain {
         // Create the genesis block
         Block genesisBlock = new Block(0, "0");
         chain.add(genesisBlock);
+        addBlockHashToTracking(genesisBlock.getHash());  // Track the genesis block hash
     }
 
-    // Method for mining a block
+    // Method for mining a block with a coinbase transaction
     private void mineBlock(Block block, int difficulty) {
+        // Add coinbase transaction for the miner reward
+        block.addCoinbaseTransaction(Main.minerAddress, Main.miningReward);
+
         String target = StringUtil.getDifficultyString(difficulty); // Difficulty target
         while (!block.getHash().substring(0, difficulty).equals(target)) {
             block.incrementNonce(); // Increment nonce
@@ -30,6 +40,12 @@ public class Blockchain {
 
     // Adding and validating a new block
     public boolean addAndValidateBlock(Block block) {
+        // Check if the block has already been received (hash exists in the deque)
+        if (receivedBlockHashes.contains(block.getHash())) {
+            System.out.println("Block already received: " + block.getHash());
+            return false;  // Reject the block if it's a duplicate
+        }
+
         // Save checkpoint if the block index surpasses the checkpoint interval
         if (block.getIndex() > lastCheckpoint + CHECKPOINT_INTERVAL) {
             saveCheckpoint("checkpoint_" + block.getIndex() + ".dat");
@@ -42,9 +58,18 @@ public class Blockchain {
             mineBlock(block, Main.difficulty); // Mine the block
             chain.add(block); // Add block to the chain
             unconfirmedTransactions.clear(); // Clear unconfirmed transactions
+            addBlockHashToTracking(block.getHash());  // Add the new block hash to the deque
             return true;
         }
         return false;
+    }
+
+    // Add block hash to the tracking deque, ensuring its size stays within the limit
+    private void addBlockHashToTracking(String blockHash) {
+        if (receivedBlockHashes.size() >= MAX_HASH_COUNT) {
+            receivedBlockHashes.poll(); // Remove the oldest block hash to maintain the fixed size
+        }
+        receivedBlockHashes.add(blockHash); // Add the new block hash
     }
 
     // Save the blockchain state periodically
@@ -91,6 +116,14 @@ public class Blockchain {
 
     // Add a transaction to the unconfirmed pool
     public boolean addTransaction(Transaction transaction) {
+        // Allow zero-value transactions without UTXO validation
+        if (transaction.value == 0) {
+            unconfirmedTransactions.add(transaction);
+            System.out.println("Zero-value transaction added to the pool.");
+            return true;
+        }
+
+        // Regular transaction validation
         if (transaction.processTransaction() && transaction.getInputsValue() >= Main.minimumTransaction) {
             unconfirmedTransactions.add(transaction);
             System.out.println("Transaction successfully added to the pool.");
@@ -102,7 +135,9 @@ public class Blockchain {
     }
 
     // Get the last block in the chain
-    private Block getLastBlock() {return chain.size() > 0 ? chain.get(chain.size() - 1) : null;}
+    private Block getLastBlock() {
+        return chain.size() > 0 ? chain.get(chain.size() - 1) : null;
+    }
 
     // Validate the blockchain
     public boolean isValidChain() {
@@ -177,7 +212,7 @@ public class Blockchain {
     public void loadBlockchain(String filename) {
         try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(filename))) {
             this.chain = (List<Block>) in.readObject();
-            Main.UTXOs = (HashMap<String, TransactionOutput>) in.readObject();
+            Main.UTXOs = (ConcurrentHashMap<String, TransactionOutput>) in.readObject();
             System.out.println("Blockchain loaded from disk.");
         } catch (Exception e) {
             e.printStackTrace();
@@ -204,9 +239,8 @@ public class Blockchain {
     }
 
     public void printChain() {
-        for (Block block : chain) {
-            System.out.println(block);
-            System.out.println();
-        }
+        String blockchainJson = new GsonBuilder().setPrettyPrinting().create().toJson(chain);
+        System.out.println("The block chain: ");
+        System.out.println(blockchainJson);
     }
 }

@@ -9,16 +9,19 @@ import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.security.Security;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Main {
-    public static HashMap<String, TransactionOutput> UTXOs = new HashMap<>(); // Global UTXO pool
+    public static ConcurrentHashMap<String, TransactionOutput> UTXOs = new ConcurrentHashMap<>(); // Global UTXO pool
     public static List<Transaction> unconfirmedTransactions = new ArrayList<>(); // Unconfirmed transaction pool
     public static float minimumTransaction = 0; // Minimum transaction value
-    public static int difficulty = 5; // Mining difficulty
+    public static int difficulty = 6; // Mining difficulty
     private static final String BLOCKCHAIN_FILE = "blockchain.dat"; // Persistent blockchain storage
     private static final String SEED_NODE_ADDRESS = "172.18.0.2"; // Seed node for peer-to-peer networking
     public static final int NODE_PORT = 7777;
     public static LRUCache<String, Boolean> receivedTransactions = new LRUCache<>(500); // Capacity of 500
+    public static String minerAddress;
+    public static float miningReward=6.00f;
 
     public static void main(String[] args) {
         System.out.println("Starting blockchain node...");
@@ -27,6 +30,7 @@ public class Main {
         // Initialize blockchain and wallets
         Blockchain blockchain = new Blockchain();
         Wallet senderWallet = new Wallet(); // Wallet for sending funds
+        minerAddress = StringUtil.getStringFromKey(senderWallet.publicKey); // Convert PublicKey to String
         NetworkManager networkManager = new NetworkManager(blockchain, senderWallet.publicKey); // Network management for peer-to-peer communication
 
         // Load blockchain from disk if it exists

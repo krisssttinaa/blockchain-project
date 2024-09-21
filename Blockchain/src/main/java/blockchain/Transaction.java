@@ -45,6 +45,14 @@ public class Transaction {
 
     // Process the transaction, updating UTXOs and checking for validity
     public boolean processTransaction() {
+        if (value == 0) {
+            // Skip UTXO validation for zero-value transactions
+            System.out.println("Processing zero-value transaction.");
+            transactionId = calculateHash();
+            outputs.add(new TransactionOutput(recipient, value, transactionId));
+            return true;
+        }
+
         if (!verifySignature()) {
             System.out.println("#Transaction Signature failed to verify");
             return false;

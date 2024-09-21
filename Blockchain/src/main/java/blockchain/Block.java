@@ -1,5 +1,5 @@
 package blockchain;
-import java.security.PublicKey;
+
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -40,30 +40,12 @@ public class Block {
         );
     }
 
-    // Method to add a transaction to this block
-    public boolean addTransaction(Transaction transaction) {
-        if(transaction == null) return false;
-
-        // Process the transaction unless it's the genesis block
-        if((!"0".equals(previousHash))) {
-            if(!transaction.processTransaction()) {
-                System.out.println("Transaction failed to process. Discarded.");
-                return false;
-            }
-        }
-
-        transactions.add(transaction);
-        System.out.println("Transaction Successfully added to Block");
-        return true;
-    }
-
     // Add coinbase transaction (miner reward)
     public void addCoinbaseTransaction(String minerAddress, float reward) {
         CoinbaseTransaction rewardTx = new CoinbaseTransaction(minerAddress, reward);
         rewardTx.processTransaction();
         transactions.add(rewardTx);
     }
-
 
     // Recalculate the block's hash
     public void updateHash() {
