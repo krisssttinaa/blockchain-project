@@ -21,13 +21,14 @@ public class Transaction {
         this.recipient = to;
         this.value = value;
         this.inputs = inputs;
+        transactionId= calculateHash();
     }
 
     // Calculates the transaction hash (used as transactionId)
     public String calculateHash() {
         sequence++; // ensure uniqueness
         return StringUtil.applySha256(
-                sender + recipient + Float.toString(value) + sequence
+                sender + recipient + Float.toString(value) + sequence+ System.currentTimeMillis()
         );
     }
 
@@ -124,13 +125,9 @@ public class Transaction {
         return total;
     }
 
-    public List<TransactionInput> getInputs() {
-        return inputs;
-    }
-
-    public List<TransactionOutput> getOutputs() {
-        return outputs;
-    }
+    public List<TransactionInput> getInputs() {return inputs;}
+    public List<TransactionOutput> getOutputs() {return outputs;}
+    public String getTransactionId() {return transactionId;}
 
     @Override
     public String toString() {

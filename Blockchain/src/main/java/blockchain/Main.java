@@ -10,10 +10,11 @@ import java.net.SocketException;
 import java.security.Security;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class Main {
     public static ConcurrentHashMap<String, TransactionOutput> UTXOs = new ConcurrentHashMap<>(); // Global UTXO pool
-    public static List<Transaction> unconfirmedTransactions = new ArrayList<>(); // Unconfirmed transaction pool
+    public static ConcurrentLinkedQueue<Transaction> unconfirmedTransactions = new ConcurrentLinkedQueue<>(); // Unconfirmed transaction pool using ConcurrentLinkedQueue
     public static float minimumTransaction = 0; // Minimum transaction value
     public static int difficulty = 6; // Mining difficulty
     private static final String BLOCKCHAIN_FILE = "blockchain.dat"; // Persistent blockchain storage
@@ -21,7 +22,8 @@ public class Main {
     public static final int NODE_PORT = 7777;
     public static LRUCache<String, Boolean> receivedTransactions = new LRUCache<>(500); // Capacity of 500
     public static String minerAddress;
-    public static float miningReward=6.00f;
+    public static float miningReward = 6.00f;
+    public static int numTransactionsToMine = 2; // Number of transactions to mine in a block
 
     public static void main(String[] args) {
         System.out.println("Starting blockchain node...");
@@ -78,6 +80,7 @@ public class Main {
         }
         return null;
     }
+}
 /*
     // Print all UTXOs in the system (debugging or monitoring purposes)
     public static void printUTXOs() {
@@ -87,4 +90,3 @@ public class Main {
             System.out.println("UTXO ID: " + id + ", Amount: " + utxo.value + ", Owner: " + StringUtil.getStringFromKey(utxo.recipient));
         }
     }*/
-}

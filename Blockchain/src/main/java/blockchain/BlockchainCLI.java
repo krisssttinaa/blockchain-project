@@ -5,9 +5,9 @@ import networking.Message;
 import networking.MessageType;
 import networking.NetworkManager;
 import networking.PeerInfo;
-
 import java.util.Map;
 import java.util.Scanner;
+import static blockchain.Main.unconfirmedTransactions;
 
 public class BlockchainCLI {
     private final Blockchain blockchain;
@@ -47,10 +47,8 @@ public class BlockchainCLI {
             }
         }
     }
-
     private void sendTransaction() {
         Map<String, PeerInfo> peers = networkManager.getPeers();
-
         if (peers.isEmpty()) {
             System.out.println("No connected nodes with wallets available.");
             return;
@@ -74,16 +72,27 @@ public class BlockchainCLI {
         }
 
         String selectedPublicKey = (String) peers.keySet().toArray()[choice - 1];
-
         System.out.print("Enter amount to send: ");
         float amount = scanner.nextFloat();
-
         try {
+            // Step 1: Create a transaction from the sender wallet
             Transaction transaction = senderWallet.sendFunds(selectedPublicKey, amount);
             if (transaction != null) {
                 System.out.println("Transaction created and broadcasted.");
+                blockchain.addTransaction(transaction); // Add the transaction to this node's pool
                 networkManager.broadcastMessage(new Message(MessageType.NEW_TRANSACTION, new Gson().toJson(transaction)));
-                blockchain.addTransaction(transaction);
+                if (unconfirmedTransactions.size() >= Main.numTransactionsToMine) {
+                    System.out.println("Mining 2 pending transactions...");
+                    Block minedBlock = blockchain.minePendingTransactions(Main.numTransactionsToMine);
+                    if (minedBlock != null) {
+                        System.out.println("Mining completed.");
+                        networkManager.broadcastMessage(new Message(MessageType.NEW_BLOCK, new Gson().toJson(minedBlock)));
+                    }
+                }
+                else {
+                    System.out.println(unconfirmedTransactions.size() + " transactions in the pool.");
+                    System.out.println("Not enough transactions to mine yet.");
+                }
             } else {
                 System.out.println("Transaction failed.");
             }

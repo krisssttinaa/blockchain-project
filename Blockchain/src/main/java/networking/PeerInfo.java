@@ -22,19 +22,14 @@ public class PeerInfo {
         printStateChange("Constructor (IP + Socket + isConnected)");
     }
 
-    // Getters and setters
-    public String getIpAddress() {
-        return ipAddress;
-    }
+    public String getIpAddress() {return ipAddress;}
 
     public void setIpAddress(String ipAddress) {
         this.ipAddress = ipAddress;
         printStateChange("setIpAddress");
     }
 
-    public boolean isConnected() {
-        return isConnected;
-    }
+    public boolean isConnected() {return isConnected;}
 
     public synchronized void setConnected(boolean connected) {
         boolean previousState = this.isConnected;
@@ -42,9 +37,7 @@ public class PeerInfo {
         printStateChange("setConnected", previousState, connected);
     }
 
-    public Socket getSocket() {
-        return socket;
-    }
+    public Socket getSocket() {return socket;}
 
     public synchronized void setSocket(Socket socket) {
         Socket previousSocket = this.socket;
@@ -52,17 +45,13 @@ public class PeerInfo {
         printStateChange("setSocket", previousSocket, socket);
     }
 
-    // Print every state change with details
+
     private void printStateChange(String method) {
         System.out.println("PeerInfo state changed via " + method + ". IP: " + ipAddress + ", isConnected: " + isConnected + ", Socket: " + socket);
     }
-
-    // Print state change with details for boolean state
     private void printStateChange(String method, boolean previousState, boolean newState) {
         System.out.println("PeerInfo isConnected changed via " + method + ". IP: " + ipAddress + ", Previous: " + previousState + ", New: " + newState);
     }
-
-    // Print state change with details for socket state
     private void printStateChange(String method, Socket previousSocket, Socket newSocket) {
         System.out.println("PeerInfo socket changed via " + method + ". IP: " + ipAddress + ", Previous Socket: " + previousSocket + ", New Socket: " + newSocket);
     }

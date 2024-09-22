@@ -3,18 +3,15 @@ package networking;
 import blockchain.*;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
-import java.util.HashSet;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import static blockchain.Main.NODE_PORT;
+import static blockchain.Main.unconfirmedTransactions;
 
 public class Node implements Runnable {
     private static final AtomicInteger idCounter = new AtomicInteger(0); // Unique ID generator for nodes
@@ -29,26 +26,18 @@ public class Node implements Runnable {
     private String peerPublicKey; // Store peer's public key as a string
     private boolean connected = true; // Track connection status
     private boolean publicKeyExchanged = false; // Ensure public keys are exchanged
-    private int numTransactionsToMine = 2; // Number of transactions needed to mine a block
-    private static final int LRU_CACHE_SIZE = 10000; // Define a reasonable size for the cache
-    //private LRUCache<String, Boolean> receivedTransactions = new LRUCache<>(LRU_CACHE_SIZE); // LRU cache to track received transactions
-
     public Node(Socket socket, Blockchain blockchain, NetworkManager networkManager) {
         this.nodeId = idCounter.incrementAndGet();
         this.socket = socket;
         this.blockchain = blockchain;
         this.networkManager = networkManager;
         this.peerIp = socket.getInetAddress().getHostAddress();
-
         try {
             this.input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             this.output = new PrintWriter(socket.getOutputStream(), true);
-
-            // Send our public key (now a string) first
-            String localPublicKeyString = networkManager.getLocalPublicKey();
+            String localPublicKeyString = networkManager.getLocalPublicKey(); // Send our public key (a string) first
             log("Sending public key: " + localPublicKeyString);
             sendMessage(new Message(MessageType.PUBLIC_KEY_EXCHANGE, localPublicKeyString));
-
         } catch (IOException e) {
             connected = false;
             log("Failed to establish connection with " + peerIp + ": " + e.getMessage());
@@ -75,18 +64,8 @@ public class Node implements Runnable {
             }
         } catch (IOException e) {
             log("Failed to read message from " + peerIp + ": " + e.getMessage());
-            handleDisconnection();
+            //handleDisconnection();
         }
-    }
-
-    private void handlePublicKeyExchange(Message message) {
-        this.peerPublicKey = message.getData(); // Store peer's public key as a string
-        publicKeyExchanged = true;
-        storePeerInfo(peerPublicKey); // Store peer info in the network manager
-        log("Public key exchanged with peer: " + peerIp);
-
-        // Acknowledge the connection
-        sendMessage(new Message(MessageType.CONNECTION_ESTABLISHED, "Connection established with peer: " + peerIp));
     }
 
     private void handleNetworkMessage(Message message) {
@@ -110,6 +89,16 @@ public class Node implements Runnable {
             networkManager.updatePeerConnectionStatus(peerIp, true);
             log("Connection fully established with peer: " + peerIp);
         }
+    }
+
+    private void handlePublicKeyExchange(Message message) {
+        this.peerPublicKey = message.getData(); // Store peer's public key as a string
+        publicKeyExchanged = true;
+        storePeerInfo(peerPublicKey); // Store peer info in the network manager
+        log("Public key exchanged with peer: " + peerIp);
+
+        // Acknowledge the connection
+        sendMessage(new Message(MessageType.CONNECTION_ESTABLISHED, "Connection established with peer: " + peerIp));
     }
 
     private void handleSharePeerList(Message receivedMsg) {
@@ -144,27 +133,35 @@ public class Node implements Runnable {
             // Deserialize the transaction from JSON
             Transaction transaction = gson.fromJson(receivedMsg.getData(), Transaction.class);
 
-            // Check if this transaction has already been processed using the shared LRU cache
+            // Check if this transaction has already been processed
             if (Main.receivedTransactions.containsKey(transaction.transactionId)) {
                 log("Transaction " + transaction.transactionId + " already processed. Ignoring...");
-                return; // Ignore if we've already seen this transaction
+                return;
             }
-
             log("Transaction deserialized successfully: " + transaction);
 
-            // Process the transaction and add it to the shared LRU cache
+            // Process the transaction and add it to the unconfirmed pool
             if (blockchain.addTransaction(transaction)) {
                 log("Transaction validated and added to pool.");
-                Main.receivedTransactions.put(transaction.transactionId, Boolean.TRUE); // Track the transaction globally
 
-                // Rebroadcast the transaction to peers, excluding the sender
+                // Step 1: Broadcast the transaction to other peers
                 networkManager.broadcastMessageExceptSender(receivedMsg, peerIp);
+                log("Transaction broadcasted to peers.");
+                // Step 2: Check if we need to mine
+                if (unconfirmedTransactions.size() >= Main.numTransactionsToMine) {
+                    log("Mining 2 pending transactions...");
+                    Block minedBlock = blockchain.minePendingTransactions(Main.numTransactionsToMine);
+                    if (minedBlock != null) {
+                        log("Block mined successfully: " + minedBlock.getHash());
 
-                // Optionally, mine pending transactions
-                Block newBlock = blockchain.minePendingTransactions(numTransactionsToMine);
-                if (newBlock != null) {
-                    log("New block mined successfully. Broadcasting...");
-                    networkManager.broadcastNewBlock(newBlock);
+                        // Step 3: Broadcast the mined block
+                        networkManager.broadcastMessage(new Message(MessageType.NEW_BLOCK, gson.toJson(minedBlock)));
+                    } else {
+                        log("Mining failed.");
+                    }
+                }
+                else {
+                    log("Not enough transactions to mine yet.");
                 }
             } else {
                 log("Transaction validation failed for transaction from " + peerIp + ".");
@@ -176,7 +173,6 @@ public class Node implements Runnable {
 
     private void handleNewBlock(Message receivedMsg) {
         Block receivedBlock = gson.fromJson(receivedMsg.getData(), Block.class);
-
         if (blockchain.addAndValidateBlock(receivedBlock)) {
             log("Block validated and added to the chain.");
             networkManager.broadcastMessageExceptSender(receivedMsg, peerIp); // Broadcast to others except sender
