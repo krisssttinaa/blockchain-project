@@ -4,8 +4,6 @@ import java.security.PrivateKey;
 import java.util.ArrayList;
 import java.util.List;
 
-import static blockchain.Main.unconfirmedTransactions;
-
 public class Transaction {
     public String transactionId; // unique identifier for the transaction, hash of the transaction's contents
     public String sender; // sender address as a string (previously PublicKey)
@@ -45,41 +43,46 @@ public class Transaction {
     }
 
     // Process the transaction, updating UTXOs and checking for validity
+    // Modify processTransaction method to include double-spending prevention
     public boolean processTransaction() {
         if (value == 0) {
-            // Skip UTXO validation for zero-value transactions
             System.out.println("Processing zero-value transaction.");
             transactionId = calculateHash();
             outputs.add(new TransactionOutput(recipient, value, transactionId));
             return true;
         }
 
+        // Step 1: Verify the signature
         if (!verifySignature()) {
             System.out.println("#Transaction Signature failed to verify");
             return false;
         }
 
-        // Gather and validate transaction inputs
+        // Step 2: Gather and validate transaction inputs
         float inputSum = 0;
-        for (TransactionInput i : inputs) {
-            i.UTXO = Main.UTXOs.get(i.transactionOutputId);
-            if (i.UTXO == null || !i.UTXO.isMine(sender)) {
-                System.out.println("#Referenced input on Transaction(" + transactionId + ") is invalid or does not belong to the sender");
+        for (TransactionInput input : inputs) {
+            input.UTXO = Main.UTXOs.get(input.transactionOutputId);
+            if (input.UTXO == null || !input.UTXO.isMine(sender)) {
+                System.out.println("#Referenced input is invalid or does not belong to the sender");
                 return false;
             }
-            inputSum += i.UTXO.value;
+            inputSum += input.UTXO.value;
         }
 
-        // Check for double spending in the pool of unconfirmed transactions
-        for (TransactionInput i : inputs) {
-            for (Transaction pendingTx : unconfirmedTransactions) {
-                for (TransactionInput pendingInput : pendingTx.inputs) {
-                    if (pendingInput.transactionOutputId.equals(i.transactionOutputId)) {
-                        System.out.println("#Input Transaction(" + i.transactionOutputId + ") is already spent in an unconfirmed transaction");
-                        return false;
-                    }
+        // Step 3: Check for double-spending in the unconfirmed pool
+        for (Transaction pendingTx : Main.unconfirmedTransactions) {
+            for (TransactionInput pendingInput : pendingTx.inputs) {
+                if (inputs.stream().anyMatch(i -> i.transactionOutputId.equals(pendingInput.transactionOutputId))) {
+                    System.out.println("#Input already spent in another unconfirmed transaction.");
+                    return false;
                 }
             }
+        }
+
+        // Step 4: Check if inputs are sufficient to cover the value
+        if (inputSum < value) {
+            System.out.println("#Not enough input value to cover the transaction.");
+            return false;
         }
 
         // Check if the transaction meets the minimum transaction value
@@ -88,22 +91,20 @@ public class Transaction {
             return false;
         }
 
-        // Generate transaction outputs
+        // Step 5: Generate outputs for recipient and sender
         transactionId = calculateHash();
-        float leftOver = inputSum - value; // Calculate the change
-        outputs.add(new TransactionOutput(recipient, value, transactionId)); // Send value to recipient
-        outputs.add(new TransactionOutput(sender, leftOver, transactionId)); // Send the leftover back to sender
+        outputs.add(new TransactionOutput(recipient, value, transactionId));  // Recipient's output
+        outputs.add(new TransactionOutput(sender, inputSum - value, transactionId));  // Change back to sender
 
-        // Update UTXOs
-        for (TransactionOutput o : outputs) {
-            Main.UTXOs.put(o.id, o);
+        // Step 6: Update UTXOs
+        for (TransactionOutput output : outputs) {
+            Main.UTXOs.put(output.id, output);  // Add outputs to UTXO pool
         }
-        for (TransactionInput i : inputs) {
-            if (i.UTXO != null) {
-                Main.UTXOs.remove(i.UTXO.id);
-            }
+        for (TransactionInput input : inputs) {
+            Main.UTXOs.remove(input.transactionOutputId);  // Remove used UTXOs
         }
-        return true;
+
+        return true;  // Transaction processed successfully
     }
 
     // Returns the total value of inputs (UTXOs) in the transaction

@@ -1,4 +1,4 @@
-package blockchain;
+package old_networking;
 import java.security.PublicKey;
 
 import com.google.gson.Gson;

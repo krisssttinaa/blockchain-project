@@ -42,29 +42,23 @@ public class Blockchain {
     }
 
     // Mine n number of pending transactions from the pool in Main
-    public synchronized Block minePendingTransactions(int numTransactionsToMine) {
+    public synchronized Block minePendingTransactions(int numTransactionsToMine, ForkResolution forkResolution) {
         if (Main.unconfirmedTransactions.size() >= numTransactionsToMine) {
             System.out.println("Mining a new block with " + numTransactionsToMine + " pending transactions...");
 
-            // Collect `numTransactionsToMine` transactions for mining
             List<Transaction> transactionsToMine = new ArrayList<>();
             for (int i = 0; i < numTransactionsToMine; i++) {
-                Transaction tx = Main.unconfirmedTransactions.poll();  // Removes the head of the queue
+                Transaction tx = Main.unconfirmedTransactions.poll();
                 if (tx != null) {
                     transactionsToMine.add(tx);
                 }
             }
 
             Block newBlock = new Block(chain.size(), chain.get(chain.size() - 1).getHash(), transactionsToMine);
-            if (addAndValidateBlock(newBlock)) {
-                System.out.println("Block added to the blockchain.");
-                return newBlock;
-            } else {
-                System.out.println("Failed to add new block to the blockchain.");
-            }
+            forkResolution.addBlock(newBlock);  // Pass the mined block to ForkResolution
+            return newBlock;
         } else {
-            System.out.println(Main.unconfirmedTransactions.size() + " transactions in the pool.");
-            System.out.println("Not enough transactions to mine yet.");
+            System.out.println(Main.unconfirmedTransactions.size() + " transactions in the pool. Not enough transactions to mine yet.");
         }
         return null;
     }
@@ -79,15 +73,13 @@ public class Blockchain {
         }
     }
 
-    // Adding and validating a new block
+    // This method adds the block if it's the next valid block in sequence
     public synchronized boolean addAndValidateBlock(Block block) {
-        // Check if the block has already been received (hash exists in the deque)
         if (receivedBlockHashes.contains(block.getHash())) {
             System.out.println("Block already received: " + block.getHash());
-            return false;  // Reject the block if it's a duplicate
+            return false;
         }
 
-        // Save checkpoint if the block index surpasses the checkpoint interval
         if (block.getIndex() > lastCheckpoint + CHECKPOINT_INTERVAL) {
             saveCheckpoint("checkpoint_" + block.getIndex() + ".dat");
             lastCheckpoint = block.getIndex();
@@ -95,12 +87,12 @@ public class Blockchain {
 
         Block lastBlock = chain.get(chain.size() - 1);
         if (block.getPreviousHash().equals(lastBlock.getHash()) && block.getIndex() == lastBlock.getIndex() + 1) {
-            mineBlock(block, Main.difficulty);  // Mine the block (if using PoW)
             chain.add(block);  // Add block to the chain
-            addBlockHashToTracking(block.getHash()); // Add the new block hash to the deque for tracking
+            addBlockHashToTracking(block.getHash());
+            System.out.println("Block added to chain successfully!");
             return true;
         } else {
-            System.out.println("Block validation failed: hash mismatch or incorrect index.");
+            System.out.println("Block validation failed: incorrect index or hash mismatch.");
         }
         return false;
     }
@@ -155,11 +147,8 @@ public class Blockchain {
         for (TransactionOutput output : previousBlock.getTransactions().get(0).getOutputs()) {
             tempUTXOs.put(output.id, output);
         }
-
         for (int i = 1; i < chain.size(); i++) {
-            Block currentBlock = chain.get(i);
-
-            // Verify the current block's hash and previous hash
+            Block currentBlock = chain.get(i); // Verify the current block's hash and previous hash
             if (!currentBlock.getHash().equals(currentBlock.calculateHash()) ||
                     !previousBlock.getHash().equals(currentBlock.getPreviousHash())) {
                 System.out.println("Block hashes are invalid.");
@@ -172,7 +161,6 @@ public class Blockchain {
                     System.out.println("Transaction signature is invalid.");
                     return false;
                 }
-
                 // Validate inputs and UTXOs
                 for (TransactionInput input : transaction.getInputs()) {
                     TransactionOutput tempOutput = tempUTXOs.get(input.transactionOutputId);
@@ -181,18 +169,15 @@ public class Blockchain {
                         return false;
                     }
                 }
-
                 // Update temp UTXOs with new transaction outputs
                 for (TransactionOutput output : transaction.getOutputs()) {
                     tempUTXOs.put(output.id, output);
                 }
-
                 // Remove inputs from temp UTXOs
                 for (TransactionInput input : transaction.getInputs()) {
                     tempUTXOs.remove(input.transactionOutputId);
                 }
             }
-
             previousBlock = currentBlock;
         }
         System.out.println("Blockchain is valid.");
@@ -227,23 +212,21 @@ public class Blockchain {
         System.out.println(blockchainJson);
     }
 
-    // Update UTXO pool after mining a block
+    // Update UTXO pool after adding a new block
     private void updateUTXOs(Block block) {
         for (Transaction transaction : block.getTransactions()) {
-            // Remove spent UTXOs
             for (TransactionInput input : transaction.getInputs()) {
-                UTXOs.remove(input.transactionOutputId);
+                Main.UTXOs.remove(input.transactionOutputId);  // Remove spent UTXOs
             }
-            // Add new UTXOs
             for (TransactionOutput output : transaction.getOutputs()) {
-                UTXOs.put(output.id, output);
+                Main.UTXOs.put(output.id, output);  // Add new UTXOs from the transaction outputs
             }
         }
     }
 
     // Get the last block in the chain
-    private Block getLastBlock() {
+    Block getLastBlock() {
         return chain.size() > 0 ? chain.get(chain.size() - 1) : null;
     }
-
+    public List<Block> getChain() {return chain;}
 }

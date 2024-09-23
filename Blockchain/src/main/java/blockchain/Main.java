@@ -16,7 +16,7 @@ public class Main {
     public static ConcurrentHashMap<String, TransactionOutput> UTXOs = new ConcurrentHashMap<>(); // Global UTXO pool
     public static ConcurrentLinkedQueue<Transaction> unconfirmedTransactions = new ConcurrentLinkedQueue<>(); // Unconfirmed transaction pool using ConcurrentLinkedQueue
     public static float minimumTransaction = 0; // Minimum transaction value
-    public static int difficulty = 6; // Mining difficulty
+    public static int difficulty = 7; // Mining difficulty
     private static final String BLOCKCHAIN_FILE = "blockchain.dat"; // Persistent blockchain storage
     private static final String SEED_NODE_ADDRESS = "172.18.0.2"; // Seed node for peer-to-peer networking
     public static final int NODE_PORT = 7777;
@@ -28,12 +28,14 @@ public class Main {
     public static void main(String[] args) {
         System.out.println("Starting blockchain node...");
         Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
-
-        // Initialize blockchain and wallets
         Blockchain blockchain = new Blockchain();
-        Wallet senderWallet = new Wallet(); // Wallet for sending funds
+        ForkResolution forkResolution = new ForkResolution(blockchain);
+        Thread forkThread = new Thread(forkResolution); // Fork resolution thread
+        forkThread.start();
+        Wallet senderWallet = new Wallet(); // Wallet for the current node
         minerAddress = StringUtil.getStringFromKey(senderWallet.publicKey); // Convert PublicKey to String
-        NetworkManager networkManager = new NetworkManager(blockchain, senderWallet.publicKey); // Network management for peer-to-peer communication
+        NetworkManager networkManager = new NetworkManager(blockchain, senderWallet.publicKey, forkResolution);
+        networkManager.startServer();
 
         // Load blockchain from disk if it exists
         File file = new File(BLOCKCHAIN_FILE);
@@ -55,8 +57,7 @@ public class Main {
             System.err.println("Error determining IP address: " + e.getMessage());
         }
 
-        // Start Command Line Interface (CLI) for user interaction
-        BlockchainCLI cli = new BlockchainCLI(blockchain, senderWallet, networkManager);
+        BlockchainCLI cli = new BlockchainCLI(blockchain, senderWallet, networkManager, forkResolution);
         cli.start();
 
         // Save blockchain to disk before exit

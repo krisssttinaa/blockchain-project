@@ -1,7 +1,7 @@
 package networking;
 
-import blockchain.Block;
 import blockchain.Blockchain;
+import blockchain.ForkResolution;
 import blockchain.StringUtil;
 import com.google.gson.Gson;
 import java.io.IOException;
@@ -23,14 +23,15 @@ public class NetworkManager {
     private final Blockchain blockchain;
     private final PublicKey localPublicKey;
     private final Gson gson = new Gson(); // Gson instance for JSON handling
-
     private static final int MAX_RETRIES = 3; // Maximum number of retry attempts
+    private final ForkResolution forkResolution; // Added ForkResolution reference
 
-    public NetworkManager(Blockchain blockchain, PublicKey localPublicKey) {
+    public NetworkManager(Blockchain blockchain, PublicKey localPublicKey, ForkResolution forkResolution) {
         this.blockchain = blockchain;
         this.localPublicKey = localPublicKey;
         startServer(); // Start the server to accept incoming connections on the same port (7777)
         startGossiping(); // Start gossiping for all nodes
+        this.forkResolution = forkResolution; // Initialize the ForkResolution
     }
 
     // Starts the server to accept incoming connections
@@ -53,14 +54,6 @@ public class NetworkManager {
         });
     }
 
-    public void broadcastNewBlock(Block block) {
-        String blockJson = gson.toJson(block); // Serialize the block to JSON
-        Message blockMessage = new Message(MessageType.NEW_BLOCK, blockJson); // Create a message for block propagation
-
-        // Broadcast the new block message to all connected peers
-        broadcastMessage(blockMessage);
-    }
-
     public void broadcastMessageExceptSender(Message message, String senderIp) {
         peers.forEach((publicKey, peerInfo) -> {
             // Avoid sending the message back to the original sender
@@ -74,8 +67,6 @@ public class NetworkManager {
             }
         });
     }
-
-
 
     private void handleNewConnection(Socket socket) {
         String peerIp = socket.getInetAddress().getHostAddress();
@@ -97,7 +88,7 @@ public class NetworkManager {
             }
 
             // Proceed with handling the new connection
-            Node node = new Node(socket, blockchain, this);
+            Node node = new Node(socket, blockchain, this, forkResolution);
             networkPool.submit(node); // Start the node in a new thread
         }
     }

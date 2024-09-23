@@ -2,7 +2,6 @@ package blockchain;
 import java.security.*;
 import java.security.MessageDigest;
 import java.security.spec.X509EncodedKeySpec;
-import java.util.Arrays;
 import java.util.Base64;
 import java.security.Signature;
 

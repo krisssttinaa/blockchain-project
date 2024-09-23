@@ -18,6 +18,7 @@ public class Node implements Runnable {
     private final int nodeId;
     private final Socket socket;
     private final Blockchain blockchain;
+    private final ForkResolution forkResolution; // Added ForkResolution reference
     private final NetworkManager networkManager;
     private BufferedReader input;
     private PrintWriter output;
@@ -26,10 +27,11 @@ public class Node implements Runnable {
     private String peerPublicKey; // Store peer's public key as a string
     private boolean connected = true; // Track connection status
     private boolean publicKeyExchanged = false; // Ensure public keys are exchanged
-    public Node(Socket socket, Blockchain blockchain, NetworkManager networkManager) {
+    public Node(Socket socket, Blockchain blockchain, NetworkManager networkManager, ForkResolution forkResolution) {
         this.nodeId = idCounter.incrementAndGet();
         this.socket = socket;
         this.blockchain = blockchain;
+        this.forkResolution = forkResolution; // Save ForkResolution instance for block processing
         this.networkManager = networkManager;
         this.peerIp = socket.getInetAddress().getHostAddress();
         try {
@@ -146,11 +148,11 @@ public class Node implements Runnable {
 
                 // Step 1: Broadcast the transaction to other peers
                 networkManager.broadcastMessageExceptSender(receivedMsg, peerIp);
-                log("Transaction broadcasted to peers.");
+                log("Transaction broadcast to peers.");
                 // Step 2: Check if we need to mine
                 if (unconfirmedTransactions.size() >= Main.numTransactionsToMine) {
                     log("Mining 2 pending transactions...");
-                    Block minedBlock = blockchain.minePendingTransactions(Main.numTransactionsToMine);
+                    Block minedBlock = blockchain.minePendingTransactions(Main.numTransactionsToMine, forkResolution);
                     if (minedBlock != null) {
                         log("Block mined successfully: " + minedBlock.getHash());
 
@@ -171,6 +173,15 @@ public class Node implements Runnable {
         }
     }
 
+    // Instead of directly adding the block to the blockchain, we use ForkResolution
+    private void handleNewBlock(Message receivedMsg) {
+            Block receivedBlock = gson.fromJson(receivedMsg.getData(), Block.class);
+            // Add the block to ForkResolution for processing, rather than adding it directly to the blockchain
+            forkResolution.addBlock(receivedBlock);
+            log("Block forwarded to ForkResolution for further processing.");
+            networkManager.broadcastMessageExceptSender(receivedMsg, peerIp); // Broadcast to others except sender
+    }
+/*
     private void handleNewBlock(Message receivedMsg) {
         Block receivedBlock = gson.fromJson(receivedMsg.getData(), Block.class);
         if (blockchain.addAndValidateBlock(receivedBlock)) {
@@ -179,7 +190,7 @@ public class Node implements Runnable {
         } else {
             log("Block validation failed for block from " + peerIp + ".");
         }
-    }
+    }*/
 
     private void handleBlockchainRequest() {
         String blockchainJson = gson.toJson(blockchain);
