@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import static blockchain.Main.NODE_PORT;
 import static blockchain.Main.unconfirmedTransactions;
+import static blockchain.Blockchain.receivedBlockHashes;
 
 public class Node implements Runnable {
     private static final AtomicInteger idCounter = new AtomicInteger(0); // Unique ID generator for nodes
@@ -130,12 +131,8 @@ public class Node implements Runnable {
 
     private void handleNewTransaction(Message receivedMsg) {
         log("Received NEW_TRANSACTION message.");
-
         try {
-            // Deserialize the transaction from JSON
             Transaction transaction = gson.fromJson(receivedMsg.getData(), Transaction.class);
-
-            // Check if this transaction has already been processed
             if (Main.receivedTransactions.containsKey(transaction.transactionId)) {
                 log("Transaction " + transaction.transactionId + " already processed. Ignoring...");
                 return;
@@ -155,9 +152,8 @@ public class Node implements Runnable {
                     Block minedBlock = blockchain.minePendingTransactions(Main.numTransactionsToMine, forkResolution);
                     if (minedBlock != null) {
                         log("Block mined successfully: " + minedBlock.getHash());
-
                         // Step 3: Broadcast the mined block
-                        networkManager.broadcastMessage(new Message(MessageType.NEW_BLOCK, gson.toJson(minedBlock)));
+                        networkManager.broadcastMessageExceptSender(new Message(MessageType.NEW_BLOCK, gson.toJson(minedBlock)), peerIp);
                     } else {
                         log("Mining failed.");
                     }
@@ -176,21 +172,15 @@ public class Node implements Runnable {
     // Instead of directly adding the block to the blockchain, we use ForkResolution
     private void handleNewBlock(Message receivedMsg) {
             Block receivedBlock = gson.fromJson(receivedMsg.getData(), Block.class);
+            if (receivedBlockHashes.contains(receivedBlock.getHash())) {
+                System.out.println("Block already received: " + receivedBlock.getHash());
+                return;
+            }
             // Add the block to ForkResolution for processing, rather than adding it directly to the blockchain
             forkResolution.addBlock(receivedBlock);
             log("Block forwarded to ForkResolution for further processing.");
             networkManager.broadcastMessageExceptSender(receivedMsg, peerIp); // Broadcast to others except sender
     }
-/*
-    private void handleNewBlock(Message receivedMsg) {
-        Block receivedBlock = gson.fromJson(receivedMsg.getData(), Block.class);
-        if (blockchain.addAndValidateBlock(receivedBlock)) {
-            log("Block validated and added to the chain.");
-            networkManager.broadcastMessageExceptSender(receivedMsg, peerIp); // Broadcast to others except sender
-        } else {
-            log("Block validation failed for block from " + peerIp + ".");
-        }
-    }*/
 
     private void handleBlockchainRequest() {
         String blockchainJson = gson.toJson(blockchain);

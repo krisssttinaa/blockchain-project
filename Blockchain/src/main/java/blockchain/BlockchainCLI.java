@@ -5,11 +5,10 @@ import networking.Message;
 import networking.MessageType;
 import networking.NetworkManager;
 import networking.PeerInfo;
-
 import java.util.Map;
 import java.util.Scanner;
 
-import static blockchain.Main.receivedTransactions;
+import static blockchain.Blockchain.receivedBlockHashes;
 import static blockchain.Main.unconfirmedTransactions;
 
 public class BlockchainCLI {
@@ -90,8 +89,6 @@ public class BlockchainCLI {
                 if (unconfirmedTransactions.size() >= Main.numTransactionsToMine) {
                     Block minedBlock = blockchain.minePendingTransactions(Main.numTransactionsToMine, forkResolution);
                     if (minedBlock != null) {
-                        System.out.println("Mining completed, block created.");
-                        forkResolution.addBlock(minedBlock);  // Add mined block to ForkResolution queue
                         networkManager.broadcastMessage(new Message(MessageType.NEW_BLOCK, new Gson().toJson(minedBlock)));
                     }
                 } else {

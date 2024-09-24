@@ -10,7 +10,7 @@ public class Blockchain {
     private List<Block> chain;
     public static ConcurrentHashMap<String, TransactionOutput> UTXOs = new ConcurrentHashMap<>(); // UTXO pool
     private static final int MAX_HASH_COUNT = 300;  // Keep only the last 300 block hashes, track only the most recent block hashes
-    private Deque<String> receivedBlockHashes = new ConcurrentLinkedDeque<>(); // Track recent block hashes
+    public static Deque<String> receivedBlockHashes = new ConcurrentLinkedDeque<>(); // Track recent block hashes
     private static final int CHECKPOINT_INTERVAL = 100;  // Interval for saving blockchain state
     private int lastCheckpoint = 0;
 
@@ -46,7 +46,15 @@ public class Blockchain {
         if (Main.unconfirmedTransactions.size() >= numTransactionsToMine) {
             System.out.println("Mining a new block with " + numTransactionsToMine + " pending transactions...");
 
+            // Step 1: Create a list to hold the transactions to be mined
             List<Transaction> transactionsToMine = new ArrayList<>();
+
+            // Step 2: Create the coinbase transaction and add it first
+            Transaction coinbaseTransaction = new CoinbaseTransaction(Main.minerAddress, Main.miningReward);
+            coinbaseTransaction.processTransaction(); // Process the coinbase transaction
+            transactionsToMine.add(coinbaseTransaction);
+
+            // Step 3: Add other pending transactions from the pool
             for (int i = 0; i < numTransactionsToMine; i++) {
                 Transaction tx = Main.unconfirmedTransactions.poll();
                 if (tx != null) {
@@ -54,8 +62,10 @@ public class Blockchain {
                 }
             }
 
+            // Step 4: Create the new block with all transactions
             Block newBlock = new Block(chain.size(), chain.get(chain.size() - 1).getHash(), transactionsToMine);
-            forkResolution.addBlock(newBlock);  // Pass the mined block to ForkResolution
+            newBlock.mineBlock(Main.difficulty);  // Ensure that the block satisfies the difficulty target
+            forkResolution.addBlock(newBlock);
             return newBlock;
         } else {
             System.out.println(Main.unconfirmedTransactions.size() + " transactions in the pool. Not enough transactions to mine yet.");
@@ -63,15 +73,6 @@ public class Blockchain {
         return null;
     }
 
-    // Method for mining a block with a coinbase transaction
-    private void mineBlock(Block block, int difficulty) {
-        block.addCoinbaseTransaction(Main.minerAddress, Main.miningReward);
-        String target = StringUtil.getDifficultyString(difficulty);
-        while (!block.getHash().substring(0, difficulty).equals(target)) {
-            block.incrementNonce();
-            block.updateHash();
-        }
-    }
 
     // This method adds the block if it's the next valid block in sequence
     public synchronized boolean addAndValidateBlock(Block block) {
@@ -89,7 +90,7 @@ public class Blockchain {
         if (block.getPreviousHash().equals(lastBlock.getHash()) && block.getIndex() == lastBlock.getIndex() + 1) {
             chain.add(block);  // Add block to the chain
             addBlockHashToTracking(block.getHash());
-            System.out.println("Block added to chain successfully!");
+            //System.out.println("Block added to chain successfully!");
             return true;
         } else {
             System.out.println("Block validation failed: incorrect index or hash mismatch.");
@@ -98,7 +99,7 @@ public class Blockchain {
     }
 
     // Add block hash to the tracking deque, ensuring its size stays within the limit
-    private void addBlockHashToTracking(String blockHash) {
+    public void addBlockHashToTracking(String blockHash) {
         if (receivedBlockHashes.size() >= MAX_HASH_COUNT) {
             receivedBlockHashes.poll(); // Remove the oldest block hash to maintain the fixed size
         }
@@ -230,3 +231,15 @@ public class Blockchain {
     }
     public List<Block> getChain() {return chain;}
 }
+
+/*
+    // Method for mining a block with a coinbase transaction
+    private void mineBlock(Block block, int difficulty) {
+        block.addCoinbaseTransaction(Main.minerAddress, Main.miningReward);
+        String target = StringUtil.getDifficultyString(difficulty);
+        while (!block.getHash().substring(0, difficulty).equals(target)) {
+            block.incrementNonce();
+            block.updateHash();
+        }
+    }
+* */

@@ -4,6 +4,8 @@ import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import static blockchain.Blockchain.receivedBlockHashes;
+
 public class ForkResolution implements Runnable {
     private final Blockchain blockchain;
     private final BlockingQueue<Block> blockQueue;
@@ -15,9 +17,7 @@ public class ForkResolution implements Runnable {
         this.forks = new HashMap<>();
     }
 
-    public void addBlock(Block block) {
-        blockQueue.add(block);
-    }
+    public void addBlock(Block block) {blockQueue.add(block);}
 
     @Override
     public void run() {
@@ -39,6 +39,7 @@ public class ForkResolution implements Runnable {
         if (blockIndex == lastBlock.getIndex() + 1) {
             if (blockchain.addAndValidateBlock(block)) {
                 System.out.println("Block added to the blockchain: " + block.getHash());
+                blockchain.addBlockHashToTracking(block.getHash());  // Add mined block hash to receivedBlockHashes
             } else {
                 System.out.println("Block failed validation: " + block.getHash());
             }

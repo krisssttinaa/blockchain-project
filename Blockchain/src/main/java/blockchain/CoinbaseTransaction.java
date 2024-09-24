@@ -6,7 +6,7 @@ import java.util.ArrayList;
 public class CoinbaseTransaction extends Transaction {
 
     public CoinbaseTransaction(String recipient, float reward) {
-        super(null, recipient, reward, new ArrayList<>());
+        super("COINBASE", recipient, reward, new ArrayList<>());
         this.transactionId = calculateHash();  // Assign unique transaction ID
     }
 
