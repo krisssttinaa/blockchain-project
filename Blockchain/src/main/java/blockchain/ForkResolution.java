@@ -33,18 +33,24 @@ public class ForkResolution implements Runnable {
         }
     }
 
+
+
+
+
+
     private void processBlock(Block block) {
         int blockIndex = block.getIndex();
         Block lastBlock = blockchain.getLastBlock();
+        System.out.println("ForkResolution Processing block: " + block.getHash());
         if (blockIndex == lastBlock.getIndex() + 1) {
             if (blockchain.addAndValidateBlock(block)) {
-                System.out.println("Block added to the blockchain: " + block.getHash());
+                System.out.println("ForkResolution Block added to the blockchain: " + block.getHash());
                 blockchain.addBlockHashToTracking(block.getHash());  // Add mined block hash to receivedBlockHashes
             } else {
-                System.out.println("Block failed validation: " + block.getHash());
+                System.out.println("ForkResolution Block failed validation: " + block.getHash());
             }
         } else if (blockIndex <= lastBlock.getIndex()) {
-            System.out.println("Block index already present, adding to forked blocks: " + blockIndex);
+            System.out.println("ForkResolution Block index already present, adding to forked blocks: " + blockIndex);
             forks.computeIfAbsent(blockIndex, k -> new ArrayList<>()).add(block);
         }
     }

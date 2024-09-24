@@ -16,7 +16,7 @@ public class Main {
     public static ConcurrentHashMap<String, TransactionOutput> UTXOs = new ConcurrentHashMap<>(); // Global UTXO pool
     public static ConcurrentLinkedQueue<Transaction> unconfirmedTransactions = new ConcurrentLinkedQueue<>(); // Unconfirmed transaction pool using ConcurrentLinkedQueue
     public static float minimumTransaction = 0; // Minimum transaction value
-    public static int difficulty = 8; // Mining difficulty
+    public static int difficulty = 6; // Mining difficulty
     private static final String BLOCKCHAIN_FILE = "blockchain.dat"; // Persistent blockchain storage
     private static final String SEED_NODE_ADDRESS = "172.18.0.2"; // Seed node for peer-to-peer networking
     public static final int NODE_PORT = 7777;

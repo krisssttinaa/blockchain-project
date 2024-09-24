@@ -13,7 +13,12 @@ public class Block {
     private int nonce;
 
     public Block(int index, String previousHash) {
-        this(index, previousHash, new ArrayList<>()); // Call the overloaded constructor with an empty list
+        this.index = index;
+        this.previousHash = previousHash;
+        this.timestamp = 0;
+        this.transactions = new ArrayList<>();
+        this.nonce = 0;
+        this.hash = calculateHash();
     }
 
     // Modified constructor to accept a list of transactions
@@ -55,10 +60,6 @@ public class Block {
         return previousHash;
     }
 
-    public long getTimestamp() {
-        return timestamp;
-    }
-
     public String getHash() {
         return hash;
     }
@@ -67,7 +68,4 @@ public class Block {
         return transactions;
     }
 
-    public int getNonce() {
-        return nonce;
-    }
 }
