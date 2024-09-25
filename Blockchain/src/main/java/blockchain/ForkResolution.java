@@ -4,8 +4,6 @@ import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
-import static blockchain.Blockchain.receivedBlockHashes;
-
 public class ForkResolution implements Runnable {
     private final Blockchain blockchain;
     private final BlockingQueue<Block> blockQueue;
@@ -32,11 +30,6 @@ public class ForkResolution implements Runnable {
             }
         }
     }
-
-
-
-
-
 
     private void processBlock(Block block) {
         int blockIndex = block.getIndex();

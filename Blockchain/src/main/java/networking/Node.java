@@ -194,7 +194,7 @@ public class Node implements Runnable {
 
     private void handleSyncResponse(Message receivedMsg) {
         Blockchain receivedBlockchain = gson.fromJson(receivedMsg.getData(), Blockchain.class);
-        blockchain.compareAndReplace(receivedBlockchain);
+        //blockchain.compareAndReplace(receivedBlockchain);
     }
 
     private void handlePeerDiscoveryRequest() {

@@ -11,7 +11,6 @@ public class Blockchain {
     public static ConcurrentHashMap<String, TransactionOutput> UTXOs = new ConcurrentHashMap<>(); // UTXO pool
     private static final int MAX_HASH_COUNT = 300;  // Keep only the last 300 block hashes, track only the most recent block hashes
     public static Deque<String> receivedBlockHashes = new ConcurrentLinkedDeque<>(); // Track recent block hashes
-    private static final int CHECKPOINT_INTERVAL = 100;  // Interval for saving blockchain state
     private int lastCheckpoint = 0;
 
     public Blockchain() {
@@ -74,28 +73,72 @@ public class Blockchain {
     }
 
 
-    // This method adds the block if it's the next valid block in sequence
     public synchronized boolean addAndValidateBlock(Block block) {
+        // Check if the block has already been processed
         if (receivedBlockHashes.contains(block.getHash())) {
             System.out.println("Block already received: " + block.getHash());
             return false;
         }
 
-        if (block.getIndex() > lastCheckpoint + CHECKPOINT_INTERVAL) {
-            saveCheckpoint("checkpoint_" + block.getIndex() + ".dat");
-            lastCheckpoint = block.getIndex();
+        Block lastBlock = chain.get(chain.size() - 1);
+
+        // Check if block is valid by PoW (has correct difficulty)
+        if (!block.getHash().startsWith(StringUtil.getDifficultyString(Main.difficulty))) {
+            System.out.println("Block failed PoW validation: incorrect difficulty.");
+            return false;
         }
 
-        Block lastBlock = chain.get(chain.size() - 1);
+        // Check if block index and previous hash match the current chain
         if (block.getPreviousHash().equals(lastBlock.getHash()) && block.getIndex() == lastBlock.getIndex() + 1) {
+            // Recalculate the block hash and validate
+            if (!block.getHash().equals(block.calculateHash())) {
+                System.out.println("Block validation failed: calculated hash does not match.");
+                return false;
+            }
+
+            // Validate all transactions within the block
+            for (Transaction transaction : block.getTransactions()) {
+                if (!transaction.verifySignature()) {
+                    System.out.println("Block contains invalid transaction signature.");
+                    return false;
+                }
+
+                // Check UTXOs (Unspent Transaction Outputs) for validity
+                for (TransactionInput input : transaction.getInputs()) {
+                    TransactionOutput utxo = Blockchain.UTXOs.get(input.transactionOutputId);
+                    if (utxo == null) {
+                        System.out.println("Transaction input refers to non-existent UTXO.");
+                        return false;
+                    }
+
+                    // Ensure input value matches UTXO value
+                    if (input.UTXO.value != utxo.value) {
+                        System.out.println("UTXO value mismatch for input.");
+                        return false;
+                    }
+                }
+            }
+
+            // Passed all validation checks, add the block to the chain
             chain.add(block);  // Add block to the chain
-            addBlockHashToTracking(block.getHash());
-            //System.out.println("Block added to chain successfully!");
+            addBlockHashToTracking(block.getHash()); // Track the block's hash
+            updateUTXOs(block);  // Update UTXO pool with block's transactions
+            System.out.println("Block added to the chain successfully: " + block.getHash());
             return true;
-        } else {
-            System.out.println("Block validation failed: incorrect index or hash mismatch.");
         }
-        return false;
+
+        // Fork - Block for an index that already exists
+        else if (block.getIndex() <= lastBlock.getIndex()) {
+            System.out.println("Received block for existing index, potential fork at index: " + block.getIndex());
+            // Add this block to the forked block list for later resolution
+            return false; // Doesn't add to the main chain yet
+        }
+
+        // Validation failed: incorrect index or hash mismatch
+        else {
+            System.out.println("Block validation failed: incorrect index or hash mismatch.");
+            return false;
+        }
     }
 
     // Add block hash to the tracking deque, ensuring its size stays within the limit
@@ -106,33 +149,6 @@ public class Blockchain {
         receivedBlockHashes.add(blockHash); // Add the new block hash
     }
 
-    // Save the blockchain state periodically
-    private void saveCheckpoint(String filename) {
-        saveBlockchain(filename);
-        System.out.println("Checkpoint saved at block " + lastCheckpoint);
-    }
-
-    // Calculate the cumulative difficulty of the chain
-    public long calculateCumulativeDifficulty() {
-        long cumulativeDifficulty = 0;
-        for (Block block : chain) {
-            cumulativeDifficulty += Math.pow(2, Main.difficulty);
-        }
-        return cumulativeDifficulty;
-    }
-
-    // Compare and replace the current blockchain with a more valid and difficult chain
-    public void compareAndReplace(Blockchain newBlockchain) {
-        long currentDifficulty = calculateCumulativeDifficulty();
-        long newDifficulty = newBlockchain.calculateCumulativeDifficulty();
-
-        if (newBlockchain.isValidChain() && newDifficulty > currentDifficulty) {
-            this.chain = new ArrayList<>(newBlockchain.chain);
-            System.out.println("Blockchain has been replaced with a more difficult valid chain.");
-        } else {
-            System.out.println("Received blockchain is invalid or does not have higher cumulative difficulty.");
-        }
-    }
 
     // Validate the blockchain
     public boolean isValidChain() {
