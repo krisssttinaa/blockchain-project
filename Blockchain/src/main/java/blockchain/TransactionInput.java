@@ -14,4 +14,11 @@ public class TransactionInput {
     public String getTransactionOutputId() {return transactionOutputId;}
     public TransactionOutput getUTXO() {return UTXO;}
     public void setUTXO(TransactionOutput UTXO) {this.UTXO = UTXO;}
+    @Override
+    public String toString() {
+        return "TransactionInput{" +
+                "transactionOutputId='" + transactionOutputId + '\'' +
+                ", UTXO=" + (UTXO != null ? UTXO.toString() : "null") +
+                '}';
+    }
 }

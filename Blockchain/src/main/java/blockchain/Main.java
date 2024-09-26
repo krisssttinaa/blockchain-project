@@ -2,7 +2,6 @@ package blockchain;
 
 import networking.LRUCache;
 import networking.NetworkManager;
-import java.io.File;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
@@ -16,8 +15,7 @@ public class Main {
     public static ConcurrentHashMap<String, TransactionOutput> UTXOs = new ConcurrentHashMap<>(); // Global UTXO pool
     public static ConcurrentLinkedQueue<Transaction> unconfirmedTransactions = new ConcurrentLinkedQueue<>(); // Unconfirmed transaction pool using ConcurrentLinkedQueue
     public static float minimumTransaction = 0; // Minimum transaction value
-    public static int difficulty = 6; // Mining difficulty
-    private static final String BLOCKCHAIN_FILE = "blockchain.dat"; // Persistent blockchain storage
+    public static int difficulty = 7; // Mining difficulty
     private static final String SEED_NODE_ADDRESS = "172.18.0.2"; // Seed node for peer-to-peer networking
     public static final int NODE_PORT = 7777;
     public static LRUCache<String, Boolean> receivedTransactions = new LRUCache<>(500); // Capacity of 500
@@ -37,13 +35,6 @@ public class Main {
         NetworkManager networkManager = new NetworkManager(blockchain, senderWallet.publicKey, forkResolution);
         networkManager.startServer();
 
-        // Load blockchain from disk if it exists
-        File file = new File(BLOCKCHAIN_FILE);
-        if (file.exists()) {
-            blockchain.loadBlockchain(BLOCKCHAIN_FILE);
-            System.out.println("Blockchain loaded from disk.");
-        }
-
         // Determine IP Address of the current node
         try {
             String currentIp = getCurrentIp();
@@ -59,10 +50,6 @@ public class Main {
 
         BlockchainCLI cli = new BlockchainCLI(blockchain, senderWallet, networkManager, forkResolution);
         cli.start();
-
-        // Save blockchain to disk before exit
-        blockchain.saveBlockchain(BLOCKCHAIN_FILE);
-        System.out.println("Blockchain saved to disk.");
     }
 
     // Method to get the current machine's IP address

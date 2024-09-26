@@ -7,15 +7,17 @@ import networking.NetworkManager;
 import networking.PeerInfo;
 import java.util.Map;
 import java.util.Scanner;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-import static blockchain.Blockchain.receivedBlockHashes;
 import static blockchain.Main.unconfirmedTransactions;
 
 public class BlockchainCLI {
     private final Blockchain blockchain;
     private final Wallet senderWallet;
     private final NetworkManager networkManager;
-    private final ForkResolution forkResolution;  // Added ForkResolution reference
+    private final ForkResolution forkResolution;
+    private final ExecutorService cliExecutor = Executors.newSingleThreadExecutor();
 
     public BlockchainCLI(Blockchain blockchain, Wallet senderWallet, NetworkManager networkManager, ForkResolution forkResolution) {
         this.blockchain = blockchain;
@@ -25,31 +27,25 @@ public class BlockchainCLI {
     }
 
     public void start() {
-        Scanner scanner = new Scanner(System.in);
-        while (true) {
-            System.out.println("1. View Blockchain");
-            System.out.println("2. Send Transaction");
-            System.out.println("3. Check Balance");
-            System.out.println("4. Exit");
-            System.out.print("Choose an option: ");
-            int choice = scanner.nextInt();
+        cliExecutor.submit(() -> {
+            Scanner scanner = new Scanner(System.in);
+            while (true) {
+                System.out.println("1. View Blockchain");
+                System.out.println("2. Send Transaction");
+                System.out.println("3. Check Balance");
+                System.out.println("4. Exit");
+                System.out.print("Choose an option: ");
+                int choice = scanner.nextInt();
 
-            switch (choice) {
-                case 1:
-                    blockchain.printChain();
-                    break;
-                case 2:
-                    sendTransaction();
-                    break;
-                case 3:
-                    checkBalance();
-                    break;
-                case 4:
-                    System.exit(0);
-                default:
-                    System.out.println("Invalid choice, please try again.");
+                switch (choice) {
+                    case 1 -> blockchain.printChain();
+                    case 2 -> sendTransaction();
+                    case 3 -> checkBalance();
+                    case 4 -> System.exit(0);
+                    default -> System.out.println("Invalid choice, please try again.");
+                }
             }
-        }
+        });
     }
 
     private void sendTransaction() {
@@ -87,10 +83,7 @@ public class BlockchainCLI {
                 System.out.println("Transaction created and broadcasted.");
                 // Step 2: Check if we need to mine a block
                 if (unconfirmedTransactions.size() >= Main.numTransactionsToMine) {
-                    Block minedBlock = blockchain.minePendingTransactions(Main.numTransactionsToMine, forkResolution);
-                    if (minedBlock != null) {
-                        networkManager.broadcastMessage(new Message(MessageType.NEW_BLOCK, new Gson().toJson(minedBlock)));
-                    }
+                    blockchain.startMining(Main.numTransactionsToMine, forkResolution);
                 } else {
                     System.out.println(unconfirmedTransactions.size() + " transactions in the pool.");
                     System.out.println("Not enough transactions to mine yet.");

@@ -36,10 +36,23 @@ public class Block {
         String transactionsData = transactions.stream()
                 .map(Transaction::toString) // Assuming Transaction class has a meaningful toString override
                 .reduce("", String::concat);
-        return StringUtil.applySha256(
-                previousHash + timestamp + index + transactionsData + nonce
-        );
+        return StringUtil.applySha256(previousHash + timestamp + index + transactionsData + nonce);
     }
+    // Calculate the hash for the block using SHA-256 (without Merkle Root for simplicity)
+    public String calculateHashOut() {
+        String transactionsData = transactions.stream()
+                .map(Transaction::toString) // Assuming Transaction class has a meaningful toString override
+                .reduce("", String::concat);
+
+        System.out.println("Hashing details: previousHash = " + previousHash +
+                ", timestamp = " + timestamp +
+                ", index = " + index +
+                ", transactions = " + transactionsData +
+                ", nonce = " + nonce);
+
+        return StringUtil.applySha256(previousHash + timestamp + index + transactionsData + nonce);
+    }
+
 
     // Mining the block: increment the nonce until the hash satisfies the difficulty
     public void mineBlock(int difficulty) {
@@ -55,17 +68,15 @@ public class Block {
     public int getIndex() {
         return index;
     }
-
     public String getPreviousHash() {
         return previousHash;
     }
-
     public String getHash() {
         return hash;
     }
-
     public List<Transaction> getTransactions() {
         return transactions;
     }
-
+    public long getTimestamp() {return timestamp;}
+    public int getNonce() {return nonce;}
 }

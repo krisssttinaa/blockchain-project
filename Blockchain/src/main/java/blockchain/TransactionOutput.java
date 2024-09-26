@@ -21,4 +21,14 @@ public class TransactionOutput {
     public String getId() {
         return id;
     }
+
+    @Override
+    public String toString() {
+        return "TransactionOutput{" +
+                "id='" + id + '\'' +
+                ", recipient='" + recipient + '\'' +
+                ", value=" + value +
+                ", parentTransactionId='" + parentTransactionId + '\'' +
+                '}';
+    }
 }

@@ -42,8 +42,7 @@ public class Transaction {
         return StringUtil.verifyECDSASig(StringUtil.getKeyFromString(sender), data, signature); // verifies using sender's public key
     }
 
-    // Process the transaction, updating UTXOs and checking for validity
-    // Modify processTransaction method to include double-spending prevention
+    // Process the transaction, updating UTXOs and checking for validity, include double-spending prevention
     public boolean processTransaction() {
         if (value == 0) {
             System.out.println("Processing zero-value transaction.");
@@ -103,8 +102,7 @@ public class Transaction {
         for (TransactionInput input : inputs) {
             Main.UTXOs.remove(input.transactionOutputId);  // Remove used UTXOs
         }
-
-        return true;  // Transaction processed successfully
+        return true;
     }
 
     // Returns the total value of inputs (UTXOs) in the transaction
@@ -129,11 +127,11 @@ public class Transaction {
     public List<TransactionInput> getInputs() {return inputs;}
     public List<TransactionOutput> getOutputs() {return outputs;}
     public String getTransactionId() {return transactionId;}
-
     @Override
     public String toString() {
         return "Transaction{" +
-                "sender='" + sender + '\'' +
+                "transactionId='" + transactionId + '\'' +
+                ", sender='" + sender + '\'' +
                 ", recipient='" + recipient + '\'' +
                 ", value=" + value +
                 ", inputs=" + inputs +

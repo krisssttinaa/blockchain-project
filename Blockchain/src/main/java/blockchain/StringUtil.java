@@ -1,4 +1,5 @@
 package blockchain;
+
 import java.security.*;
 import java.security.MessageDigest;
 import java.security.spec.X509EncodedKeySpec;
@@ -101,7 +102,12 @@ public class StringUtil {
 
     public static PublicKey getKeyFromString(String key) {
         try {
+            key = key.replaceAll("-----BEGIN PUBLIC KEY-----", "")
+                    .replaceAll("-----END PUBLIC KEY-----", "")
+                    .replaceAll("\\s+", ""); // Remove spaces or newlines
+            System.out.println("Key being processed: " + key);
             byte[] keyBytes = Base64.getDecoder().decode(key);
+            System.out.println("Decoded key length: " + keyBytes.length);
             X509EncodedKeySpec spec = new X509EncodedKeySpec(keyBytes);
             KeyFactory keyFactory = KeyFactory.getInstance("ECDSA", "BC");
             return keyFactory.generatePublic(spec);
