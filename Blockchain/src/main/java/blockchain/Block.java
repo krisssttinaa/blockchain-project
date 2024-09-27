@@ -21,7 +21,6 @@ public class Block {
         this.hash = calculateHash();
     }
 
-    // Modified constructor to accept a list of transactions
     public Block(int index, String previousHash, List<Transaction> transactions) {
         this.index = index;
         this.previousHash = previousHash;
@@ -40,7 +39,7 @@ public class Block {
     }
 
     // Mining the block: increment the nonce until the hash satisfies the difficulty
-    public void mineBlock(int difficulty) {
+    public synchronized void mineBlock(int difficulty) {
         String target = new String(new char[difficulty]).replace('\0', '0');  // Create a target string with the correct number of leading zeros
         while (!hash.substring(0, difficulty).equals(target)) {
             nonce++;
@@ -50,18 +49,10 @@ public class Block {
     }
 
     // Getters
-    public int getIndex() {
-        return index;
-    }
-    public String getPreviousHash() {
-        return previousHash;
-    }
-    public String getHash() {
-        return hash;
-    }
-    public List<Transaction> getTransactions() {
-        return transactions;
-    }
+    public int getIndex() {return index;}
+    public String getPreviousHash() {return previousHash;}
+    public String getHash() {return hash;}
+    public List<Transaction> getTransactions() {return transactions;}
     public long getTimestamp() {return timestamp;}
     public int getNonce() {return nonce;}
 }

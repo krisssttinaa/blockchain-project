@@ -99,7 +99,7 @@ public class StringUtil {
         }
     }
 
-    public static PublicKey getKeyFromString(String key) {
+    public synchronized static PublicKey getKeyFromString(String key) {
         try {
             byte[] keyBytes = Base64.getDecoder().decode(key);
             X509EncodedKeySpec spec = new X509EncodedKeySpec(keyBytes);

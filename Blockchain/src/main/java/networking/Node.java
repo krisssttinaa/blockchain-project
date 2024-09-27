@@ -142,21 +142,13 @@ public class Node implements Runnable{
             // Process the transaction and add it to the unconfirmed pool
             if (blockchain.addTransaction(transaction)) {
                 log("Transaction validated and added to pool.");
-
                 // Step 1: Broadcast the transaction to other peers
                 networkManager.broadcastMessageExceptSender(receivedMsg, peerIp);
                 log("Transaction broadcast to peers.");
                 // Step 2: Check if we need to mine
                 if (unconfirmedTransactions.size() >= Main.numTransactionsToMine) {
                     log("Mining 2 pending transactions...");
-                    Block minedBlock = blockchain.minePendingTransactions(Main.numTransactionsToMine, forkResolution);
-                    if (minedBlock != null) {
-                        log("Block mined successfully: " + minedBlock.getHash());
-                        // Step 3: Broadcast the mined block
-                        networkManager.broadcastMessageExceptSender(new Message(MessageType.NEW_BLOCK, gson.toJson(minedBlock)), peerIp);
-                    } else {
-                        log("Mining failed.");
-                    }
+                    blockchain.startMining(Main.numTransactionsToMine, forkResolution);
                 }
                 else {
                     log("Not enough transactions to mine yet.");

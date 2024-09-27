@@ -5,8 +5,6 @@ import com.google.gson.GsonBuilder;
 import networking.Message;
 import networking.MessageType;
 import networking.NetworkManager;
-
-import java.io.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -14,7 +12,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class Blockchain {
-    private List<Block> chain;
+    private final List<Block> chain;
     public static ConcurrentHashMap<String, TransactionOutput> UTXOs = new ConcurrentHashMap<>(); // UTXO pool
     private static final int MAX_HASH_COUNT = 300;  // Keep only the last 300 block hashes, track only the most recent block hashes
     public static Deque<String> receivedBlockHashes = new ConcurrentLinkedDeque<>(); // Track recent block hashes
@@ -28,16 +26,8 @@ public class Blockchain {
         addBlockHashToTracking(genesisBlock.getHash());  // Track the genesis block hash
     }
 
-    // Setter for NetworkManager
-    public void setNetworkManager(NetworkManager networkManager) {
-        this.networkManager = networkManager;
-    }
-
-    // Start mining asynchronously
-    public void startMining(int numTransactionsToMine, ForkResolution forkResolution) {
-        miningExecutor.submit(() -> {
-            minePendingTransactions(numTransactionsToMine, forkResolution);
-        });
+    public void startMining(int numTransactionsToMine, ForkResolution forkResolution) { // Start mining asynchronously
+        miningExecutor.submit(() -> minePendingTransactions(numTransactionsToMine, forkResolution));
     }
 
     // Add a transaction to the global unconfirmed pool in Main
@@ -60,7 +50,7 @@ public class Blockchain {
     }
 
     // Mine n number of pending transactions from the pool in Main
-    public synchronized Block minePendingTransactions(int numTransactionsToMine, ForkResolution forkResolution) {
+    public synchronized void minePendingTransactions(int numTransactionsToMine, ForkResolution forkResolution) {
             if (Main.unconfirmedTransactions.size() >= numTransactionsToMine) {
                 System.out.println("Mining a new block with " + numTransactionsToMine + " pending transactions...");
                 // Step 1: Create a list to hold the transactions to be mined
@@ -81,14 +71,11 @@ public class Blockchain {
                 Block newBlock = new Block(chain.size(), chain.get(chain.size() - 1).getHash(), transactionsToMine);
                 newBlock.mineBlock(Main.difficulty);
                 forkResolution.addBlock(newBlock);  // Add block to ForkResolution for consensus
-                System.out.println("We go further");
                 networkManager.broadcastMessage(new Message(MessageType.NEW_BLOCK, new Gson().toJson(newBlock)));
                 System.out.println("BROADCASTED");
-                return newBlock;
             } else {
                 System.out.println(Main.unconfirmedTransactions.size() + " transactions in the pool. Not enough transactions to mine yet.");
             }
-            return null;
     }
 
     public synchronized boolean addAndValidateBlock(Block block) {
@@ -179,7 +166,6 @@ public class Blockchain {
             System.out.println("Blockchain is empty.");
             return false;
         }
-
         HashMap<String, TransactionOutput> tempUTXOs = new HashMap<>();
         Block previousBlock = chain.get(0); // Genesis block
 
@@ -224,28 +210,6 @@ public class Blockchain {
         return true;
     }
 
-    // Save the blockchain to disk
-    public void saveBlockchain(String filename) {
-        try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(filename))) {
-            out.writeObject(this.chain);
-            out.writeObject(Main.UTXOs);
-            System.out.println("Blockchain saved to disk.");
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    // Load the blockchain from disk
-    public void loadBlockchain(String filename) {
-        try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(filename))) {
-            this.chain = (List<Block>) in.readObject();
-            Main.UTXOs = (ConcurrentHashMap<String, TransactionOutput>) in.readObject();
-            System.out.println("Blockchain loaded from disk.");
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
     public void printChain() {
         String blockchainJson = new GsonBuilder().setPrettyPrinting().create().toJson(chain);
         System.out.println("The block chain: ");
@@ -264,6 +228,7 @@ public class Blockchain {
         }
     }
 
+    public void setNetworkManager(NetworkManager networkManager) {this.networkManager = networkManager;}
     // Get the last block in the chain
     Block getLastBlock() {
         return chain.size() > 0 ? chain.get(chain.size() - 1) : null;

@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-
 import static blockchain.Main.unconfirmedTransactions;
 
 public class BlockchainCLI {
@@ -23,7 +22,7 @@ public class BlockchainCLI {
         this.blockchain = blockchain;
         this.senderWallet = senderWallet;
         this.networkManager = networkManager;
-        this.forkResolution = forkResolution;  // Initialize ForkResolution
+        this.forkResolution = forkResolution;
     }
 
     public void start() {
@@ -64,12 +63,10 @@ public class BlockchainCLI {
         Scanner scanner = new Scanner(System.in);
         int choice = scanner.nextInt();
         scanner.nextLine(); // Consume the newline
-
         if (choice < 1 || choice > peers.size()) {
             System.out.println("Invalid choice.");
             return;
         }
-
         String selectedPublicKey = (String) peers.keySet().toArray()[choice - 1];
         System.out.print("Enter amount to send: ");
         float amount = scanner.nextFloat();
@@ -85,8 +82,8 @@ public class BlockchainCLI {
                 if (unconfirmedTransactions.size() >= Main.numTransactionsToMine) {
                     blockchain.startMining(Main.numTransactionsToMine, forkResolution);
                 } else {
-                    System.out.println(unconfirmedTransactions.size() + " transactions in the pool.");
-                    System.out.println("Not enough transactions to mine yet.");
+                    System.out.println(unconfirmedTransactions.size() + " transactions in the pool, NOT ENOUGH.");
+                    //System.out.println("Not enough transactions to mine yet.");
                 }
             } else {
                 System.out.println("Transaction failed.");
