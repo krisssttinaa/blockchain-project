@@ -12,16 +12,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.locks.ReentrantLock;
 
 public class Blockchain {
     private List<Block> chain;
-    private final ReentrantLock chainLock = new ReentrantLock();  // Lock for blockchain access
     public static ConcurrentHashMap<String, TransactionOutput> UTXOs = new ConcurrentHashMap<>(); // UTXO pool
     private static final int MAX_HASH_COUNT = 300;  // Keep only the last 300 block hashes, track only the most recent block hashes
     public static Deque<String> receivedBlockHashes = new ConcurrentLinkedDeque<>(); // Track recent block hashes
     private final ExecutorService miningExecutor = Executors.newSingleThreadExecutor(); // A single thread for mining
-    NetworkManager networkManager;
+    private NetworkManager networkManager;  // Not final now, to allow setter
 
     public Blockchain() {
         this.chain = new ArrayList<>();
@@ -30,16 +28,15 @@ public class Blockchain {
         addBlockHashToTracking(genesisBlock.getHash());  // Track the genesis block hash
     }
 
+    // Setter for NetworkManager
+    public void setNetworkManager(NetworkManager networkManager) {
+        this.networkManager = networkManager;
+    }
+
     // Start mining asynchronously
     public void startMining(int numTransactionsToMine, ForkResolution forkResolution) {
         miningExecutor.submit(() -> {
-            Block minedBlock = minePendingTransactions(numTransactionsToMine, forkResolution);
-            if (minedBlock != null) {
-                System.out.println("Block mined: " + minedBlock.getHash());
-                // Immediately broadcast the block after mining
-                networkManager.broadcastMessage(new Message(MessageType.NEW_BLOCK, new Gson().toJson(minedBlock)));
-                System.out.println("Serialized block being broadcasted: " + new Gson().toJson(minedBlock));
-            }
+            minePendingTransactions(numTransactionsToMine, forkResolution);
         });
     }
 
@@ -51,7 +48,6 @@ public class Blockchain {
             System.out.println("Zero-value transaction added to the pool.");
             return true;
         }
-
         if (transaction.processTransaction()) {
             Main.unconfirmedTransactions.add(transaction);
             Main.receivedTransactions.put(transaction.transactionId, Boolean.TRUE); // Add to received transactions cache
@@ -65,19 +61,14 @@ public class Blockchain {
 
     // Mine n number of pending transactions from the pool in Main
     public synchronized Block minePendingTransactions(int numTransactionsToMine, ForkResolution forkResolution) {
-        chainLock.lock();  // Ensure thread-safe access to blockchain state
-        try {
             if (Main.unconfirmedTransactions.size() >= numTransactionsToMine) {
                 System.out.println("Mining a new block with " + numTransactionsToMine + " pending transactions...");
-
                 // Step 1: Create a list to hold the transactions to be mined
                 List<Transaction> transactionsToMine = new ArrayList<>();
-
                 // Step 2: Create the coinbase transaction and add it first
                 Transaction coinbaseTransaction = new CoinbaseTransaction(Main.minerAddress, Main.miningReward);
                 coinbaseTransaction.processTransaction();  // Process the coinbase transaction
                 transactionsToMine.add(coinbaseTransaction);
-
                 // Step 3: Add other pending transactions from the pool
                 for (int i = 0; i < numTransactionsToMine; i++) {
                     Transaction tx = Main.unconfirmedTransactions.poll();
@@ -90,15 +81,14 @@ public class Blockchain {
                 Block newBlock = new Block(chain.size(), chain.get(chain.size() - 1).getHash(), transactionsToMine);
                 newBlock.mineBlock(Main.difficulty);
                 forkResolution.addBlock(newBlock);  // Add block to ForkResolution for consensus
-
+                System.out.println("We go further");
+                networkManager.broadcastMessage(new Message(MessageType.NEW_BLOCK, new Gson().toJson(newBlock)));
+                System.out.println("BROADCASTED");
                 return newBlock;
             } else {
                 System.out.println(Main.unconfirmedTransactions.size() + " transactions in the pool. Not enough transactions to mine yet.");
             }
             return null;
-        } finally {
-            chainLock.unlock();  // Always release the lock
-        }
     }
 
     public synchronized boolean addAndValidateBlock(Block block) {
@@ -123,7 +113,7 @@ public class Blockchain {
                 System.out.println("Block's current hash: " + block.getHash());
                 System.out.println("Block's nonce: " + block.getNonce());
                 System.out.println("Block's timestamp: " + block.getTimestamp());*/
-                String recalculatedHash = block.calculateHashOut();
+                String recalculatedHash = block.calculateHash();
                 //System.out.println("Hash components for recalculation: " + block.getPreviousHash() + block.getTimestamp() + block.getIndex() + block.getTransactions() + block.getNonce());
                 //System.out.println("Recalculated block hash: " + recalculatedHash);
                 if (!block.getHash().equals(recalculatedHash)) {

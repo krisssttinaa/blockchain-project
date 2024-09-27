@@ -80,7 +80,7 @@ public class BlockchainCLI {
                 blockchain.addTransaction(transaction);
                 Main.receivedTransactions.put(transaction.transactionId, true);
                 networkManager.broadcastMessage(new Message(MessageType.NEW_TRANSACTION, new Gson().toJson(transaction)));
-                System.out.println("Transaction created and broadcasted.");
+                System.out.println("Transaction created and broadcast.");
                 // Step 2: Check if we need to mine a block
                 if (unconfirmedTransactions.size() >= Main.numTransactionsToMine) {
                     blockchain.startMining(Main.numTransactionsToMine, forkResolution);

@@ -10,7 +10,7 @@ public class TransactionOutput {
         this.recipient = recipient;
         this.value = value;
         this.parentTransactionId = parentTransactionId;
-        this.id = StringUtil.applySha256(recipient + Float.toString(value) + parentTransactionId);
+        this.id = StringUtil.applySha256(recipient + value + parentTransactionId);
     }
 
     // Check if the coin belongs to the provided public key
@@ -18,9 +18,6 @@ public class TransactionOutput {
         return publicKey.equals(recipient);
     }
 
-    public String getId() {
-        return id;
-    }
 
     @Override
     public String toString() {

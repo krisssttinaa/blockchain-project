@@ -1,9 +1,6 @@
 package networking;
 
 public enum MessageType {
-    HANDSHAKE_INIT,
-    HANDSHAKE_RESPONSE,
-    HANDSHAKE_FINAL,
     NEW_TRANSACTION,
     NEW_BLOCK,
     BLOCKCHAIN_REQUEST,
@@ -15,6 +12,5 @@ public enum MessageType {
     PEER_DISCOVERY_REQUEST,
     PUBLIC_KEY_EXCHANGE,
     CONNECTION_ESTABLISHED,
-    DISCONNECT,
-    PEER_DISCOVERY_ACK
+    DISCONNECT
 }

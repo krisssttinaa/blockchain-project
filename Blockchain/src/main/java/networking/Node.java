@@ -14,7 +14,7 @@ import static blockchain.Main.NODE_PORT;
 import static blockchain.Main.unconfirmedTransactions;
 import static blockchain.Blockchain.receivedBlockHashes;
 
-public class Node implements Runnable {
+public class Node implements Runnable{
     private static final AtomicInteger idCounter = new AtomicInteger(0); // Unique ID generator for nodes
     private final int nodeId;
     private final Socket socket;
@@ -171,17 +171,7 @@ public class Node implements Runnable {
 
     // Instead of directly adding the block to the blockchain, we use ForkResolution
     private void handleNewBlock(Message receivedMsg) {
-            Block receivedBlock = gson.fromJson(receivedMsg.getData(), Block.class);
-            System.out.println("Deserialized block: " + receivedBlock);  // Log deserialized block
-        System.out.println("Deserialized block details:");
-        System.out.println("Index: " + receivedBlock.getIndex());
-        System.out.println("Previous Hash: " + receivedBlock.getPreviousHash());
-        System.out.println("Nonce: " + receivedBlock.getNonce());
-        System.out.println("Timestamp: " + receivedBlock.getTimestamp());
-        System.out.println("Transactions: " + receivedBlock.getTransactions());
-        System.out.println("Hash: " + receivedBlock.getHash());
-
-
+        Block receivedBlock = gson.fromJson(receivedMsg.getData(), Block.class);
         if (receivedBlockHashes.contains(receivedBlock.getHash())) {
                 System.out.println("Block already received: " + receivedBlock.getHash());
                 return;

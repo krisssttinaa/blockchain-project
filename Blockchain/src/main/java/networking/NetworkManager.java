@@ -15,19 +15,21 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+
 import static blockchain.Main.NODE_PORT;
 
 public class NetworkManager {
     private final Map<String, PeerInfo> peers = new ConcurrentHashMap<>(); // Store PeerInfo by public key
     private final ExecutorService networkPool = Executors.newCachedThreadPool(); // Thread pool for networking tasks
-    private final Blockchain blockchain;
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1); // Creates a single-thread scheduler
+    private Blockchain blockchain; // Removed from constructor, set later
     private final PublicKey localPublicKey;
     private final Gson gson = new Gson(); // Gson instance for JSON handling
     private static final int MAX_RETRIES = 3; // Maximum number of retry attempts
     private final ForkResolution forkResolution; // Added ForkResolution reference
 
-    public NetworkManager(Blockchain blockchain, PublicKey localPublicKey, ForkResolution forkResolution) {
-        this.blockchain = blockchain;
+    public NetworkManager(PublicKey localPublicKey, ForkResolution forkResolution) {
         this.localPublicKey = localPublicKey;
         startServer(); // Start the server to accept incoming connections on the same port (7777)
         startGossiping(); // Start gossiping for all nodes
@@ -161,7 +163,7 @@ public class NetworkManager {
         networkPool.submit(() -> {
             while (true) {
                 try {
-                    Thread.sleep(50000); // Gossip every 20 seconds
+                    Thread.sleep(60000); // Gossip every 20 seconds
                     gossip();
                 } catch (InterruptedException e) {
                     System.err.println("Gossiping thread interrupted: " + e.getMessage());
@@ -173,6 +175,14 @@ public class NetworkManager {
             }
         });
     }
+
+    // Method to stop gossiping if needed
+    public void stopGossiping() {
+        if (!scheduler.isShutdown()) {
+            scheduler.shutdown();
+        }
+    }
+
 
     // Gossip the peer list to all connected peers
     private void gossip() {
@@ -206,19 +216,23 @@ public class NetworkManager {
     }
 
     // Broadcasts a message to all connected peers
-    public void broadcastMessage(Message message) {
-        System.out.println("Broadcasting message to all peers...");
-        peers.forEach((publicKey, peerInfo) -> {
-            Socket socket = peerInfo.getSocket();
-            if (peerInfo.isConnected() && socket != null) {
-                try {
-                    sendMessageToPeer(socket, message);
-                } catch (IOException e) {
-                    System.err.println("Failed to send message to peer " + peerInfo.getIpAddress() + ": " + e.getMessage());
-                    peerInfo.setConnected(false); // Mark the peer as disconnected
+    public synchronized void broadcastMessage(Message message) {
+        try {
+            System.out.println("Broadcasting message to all peers...");
+            peers.forEach((publicKey, peerInfo) -> {
+                Socket socket = peerInfo.getSocket();
+                if (peerInfo.isConnected() && socket != null) {
+                    try {
+                        sendMessageToPeer(socket, message);
+                    } catch (IOException e) {
+                        System.err.println("Failed to send message to peer " + peerInfo.getIpAddress() + ": " + e.getMessage());
+                        peerInfo.setConnected(false); // Mark the peer as disconnected
+                    }
                 }
-            }
-        });
+            });
+        } catch (Exception e) {
+            System.err.println("Failed to broadcast message to all peers: " + e.getMessage());
+        }
     }
 
     // Sends a message to a specific peer using an existing socket connection
@@ -260,6 +274,7 @@ public class NetworkManager {
         }
     }
 
+    public void setBlockchain(Blockchain blockchain) {this.blockchain = blockchain;}
     public String getLocalPublicKey() {return StringUtil.getStringFromKey(localPublicKey);}
     public Map<String, PeerInfo> getPeers() {
         return peers;

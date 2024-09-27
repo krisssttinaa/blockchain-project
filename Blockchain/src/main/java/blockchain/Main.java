@@ -24,32 +24,36 @@ public class Main {
     public static int numTransactionsToMine = 2; // Number of transactions to mine in a block
 
     public static void main(String[] args) {
-        System.out.println("Starting blockchain node...");
-        Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
-        Blockchain blockchain = new Blockchain();
-        ForkResolution forkResolution = new ForkResolution(blockchain);
-        Thread forkThread = new Thread(forkResolution); // Fork resolution thread
-        forkThread.start();
-        Wallet senderWallet = new Wallet(); // Wallet for the current node
-        minerAddress = StringUtil.getStringFromKey(senderWallet.publicKey); // Convert PublicKey to String
-        NetworkManager networkManager = new NetworkManager(blockchain, senderWallet.publicKey, forkResolution);
-        networkManager.startServer();
+            System.out.println("Starting blockchain node...");
+            Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
+            Blockchain blockchain = new Blockchain();  // NetworkManager is not set yet
 
-        // Determine IP Address of the current node
-        try {
-            String currentIp = getCurrentIp();
-            System.out.println("Current IP Address: " + currentIp);
-            if (!Objects.equals(currentIp, SEED_NODE_ADDRESS)) {
-                System.out.println("Connecting to seed node at " + SEED_NODE_ADDRESS);
-                networkManager.connectToPeer(SEED_NODE_ADDRESS, NODE_PORT); // Connect to the seed node
-                System.out.println("Connected to seed node.");
+            ForkResolution forkResolution = new ForkResolution(blockchain);
+            Thread forkThread = new Thread(forkResolution); // Fork resolution thread
+            forkThread.start();
+
+            Wallet senderWallet = new Wallet(); // Wallet for the current node
+            minerAddress = StringUtil.getStringFromKey(senderWallet.publicKey); // Convert PublicKey to String
+            NetworkManager networkManager = new NetworkManager(senderWallet.publicKey, forkResolution); // No blockchain yet
+            blockchain.setNetworkManager(networkManager);
+            networkManager.setBlockchain(blockchain);  // Ensure NetworkManager has Blockchain
+
+            networkManager.startServer();
+
+            try {
+                String currentIp = getCurrentIp();
+                System.out.println("Current IP Address: " + currentIp);
+                if (!Objects.equals(currentIp, SEED_NODE_ADDRESS)) {
+                    System.out.println("Connecting to seed node at " + SEED_NODE_ADDRESS);
+                    networkManager.connectToPeer(SEED_NODE_ADDRESS, NODE_PORT); // Connect to the seed node
+                    System.out.println("Connected to seed node.");
+                }
+            } catch (SocketException e) {
+                System.err.println("Error determining IP address: " + e.getMessage());
             }
-        } catch (SocketException e) {
-            System.err.println("Error determining IP address: " + e.getMessage());
-        }
 
-        BlockchainCLI cli = new BlockchainCLI(blockchain, senderWallet, networkManager, forkResolution);
-        cli.start();
+            BlockchainCLI cli = new BlockchainCLI(blockchain, senderWallet, networkManager, forkResolution);
+            cli.start();
     }
 
     // Method to get the current machine's IP address

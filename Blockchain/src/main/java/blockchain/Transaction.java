@@ -26,19 +26,19 @@ public class Transaction {
     public String calculateHash() {
         sequence++; // ensure uniqueness
         return StringUtil.applySha256(
-                sender + recipient + Float.toString(value) + sequence+ System.currentTimeMillis()
+                sender + recipient + value + sequence+ System.currentTimeMillis()
         );
     }
 
     // Generates a signature using the sender's private key
     public void generateSignature(PrivateKey privateKey) {
-        String data = sender + recipient + Float.toString(value);
+        String data = sender + recipient + value;
         signature = StringUtil.applyECDSASig(privateKey, data); // generate signature
     }
 
     // Verifies the transaction signature to ensure it was signed by the owner of the sender's private key
     public boolean verifySignature() {
-        String data = sender + recipient + Float.toString(value);
+        String data = sender + recipient + value;
         return StringUtil.verifyECDSASig(StringUtil.getKeyFromString(sender), data, signature); // verifies using sender's public key
     }
 
