@@ -17,7 +17,7 @@ public class Blockchain {
     private static final int MAX_HASH_COUNT = 300;  // Keep only the last 300 block hashes, track only the most recent block hashes
     public static Deque<String> receivedBlockHashes = new ConcurrentLinkedDeque<>(); // Track recent block hashes
     private final ExecutorService miningExecutor = Executors.newSingleThreadExecutor(); // A single thread for mining
-    private NetworkManager networkManager;  // Not final now, to allow setter
+    private NetworkManager networkManager;
 
     public Blockchain() {
         this.chain = new ArrayList<>();
@@ -92,8 +92,7 @@ public class Blockchain {
             }
             // Check if block index and previous hash match the current chain
             if (block.getPreviousHash().equals(lastBlock.getHash()) && block.getIndex() == lastBlock.getIndex() + 1) {
-                /*
-                System.out.println("=== Block Validation Start ===");
+                /*System.out.println("=== Block Validation Start ===");
                 System.out.println("Validating block with index: " + block.getIndex());
                 System.out.println("Previous block hash: " + lastBlock.getHash());
                 System.out.println("Block's previous hash: " + block.getPreviousHash());
@@ -102,7 +101,7 @@ public class Blockchain {
                 System.out.println("Block's timestamp: " + block.getTimestamp());*/
                 String recalculatedHash = block.calculateHash();
                 //System.out.println("Hash components for recalculation: " + block.getPreviousHash() + block.getTimestamp() + block.getIndex() + block.getTransactions() + block.getNonce());
-                //System.out.println("Recalculated block hash: " + recalculatedHash);
+                System.out.println("Recalculated block hash: " + recalculatedHash);
                 if (!block.getHash().equals(recalculatedHash)) {
                     System.out.println("Block validation failed: calculated hash does not match.");
                     System.out.println("Block hash: " + block.getHash());
@@ -111,14 +110,12 @@ public class Blockchain {
                 } else {
                     System.out.println("Block hash matches the recalculated hash.");
                 }
-
                 // Validate all transactions within the block
                 for (Transaction transaction : block.getTransactions()) {
                     if (!transaction.verifySignature()) {
                         System.out.println("Block contains invalid transaction signature.");
                         return false;
                     }
-
                     // Check UTXOs (Unspent Transaction Outputs) for validity
                     for (TransactionInput input : transaction.getInputs()) {
                         TransactionOutput utxo = Blockchain.UTXOs.get(input.transactionOutputId);
@@ -126,13 +123,13 @@ public class Blockchain {
                             System.out.println("Transaction input refers to non-existent UTXO.");
                             return false;
                         }
-
                         // Ensure input value matches UTXO value
                         if (input.UTXO.value != utxo.value) {
                             System.out.println("UTXO value mismatch for input.");
                             return false;
                         }
                     }
+                    System.out.println("We are here5");
                 }
                 chain.add(block);  // Add block to the chain
                 addBlockHashToTracking(block.getHash());  // Track the block's hash

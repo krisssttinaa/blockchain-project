@@ -1,7 +1,9 @@
 package blockchain;
 
 import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class Transaction {
@@ -38,9 +40,31 @@ public class Transaction {
 
     // Verifies the transaction signature to ensure it was signed by the owner of the sender's private key
     public boolean verifySignature() {
+        // Skip signature verification for Coinbase transactions
+        if ("COINBASE".equals(this.sender)) {
+            System.out.println("Skipping signature verification for Coinbase transaction: " + this.transactionId);
+            return true;
+        }
         String data = sender + recipient + value;
-        return StringUtil.verifyECDSASig(StringUtil.getKeyFromString(sender), data, signature); // verifies using sender's public key
+        //System.out.println("Verifying signature with data: " + data);
+        //System.out.println("Signature in bytes: " + Arrays.toString(signature));
+        try {
+            PublicKey senderPublicKey = StringUtil.getKeyFromString(sender);
+            //System.out.println("Sender PublicKey object: " + senderPublicKey);
+            boolean verified = StringUtil.verifyECDSASig(senderPublicKey, data, signature);
+            if (verified) {
+                System.out.println("Signature successfully verified!");
+            } else {
+                System.out.println("Signature verification failed.");
+            }
+            return verified;
+        } catch (Exception e) {
+            System.out.println("Error during signature verification: " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        }
     }
+
 
     // Process the transaction, updating UTXOs and checking for validity, include double-spending prevention
     public boolean processTransaction() {
@@ -104,6 +128,11 @@ public class Transaction {
         }
         return true;
     }
+
+    // Ensure you have setters and getters for 'sender' and 'recipient' if needed
+    public void setSender(String sender) {this.sender = sender;}
+
+    public void setRecipient(String recipient) {this.recipient = recipient;}
 
     // Returns the total value of inputs (UTXOs) in the transaction
     public float getInputsValue() {

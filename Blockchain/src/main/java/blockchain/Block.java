@@ -48,7 +48,6 @@ public class Block {
         System.out.println("Block mined! Hash: " + hash);
     }
 
-    // Getters
     public int getIndex() {return index;}
     public String getPreviousHash() {return previousHash;}
     public String getHash() {return hash;}

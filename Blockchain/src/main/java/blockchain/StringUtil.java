@@ -101,7 +101,10 @@ public class StringUtil {
 
     public synchronized static PublicKey getKeyFromString(String key) {
         try {
-            byte[] keyBytes = Base64.getDecoder().decode(key);
+            // Replace any Unicode escape sequences for '='
+            String filteredKey = key.replace("\\u003d", "=");
+            // Continue with the decoding and key generation process
+            byte[] keyBytes = Base64.getDecoder().decode(filteredKey);
             X509EncodedKeySpec spec = new X509EncodedKeySpec(keyBytes);
             KeyFactory keyFactory = KeyFactory.getInstance("ECDSA", "BC");
             return keyFactory.generatePublic(spec);

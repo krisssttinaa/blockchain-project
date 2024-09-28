@@ -28,6 +28,7 @@ public class NetworkManager {
     private final Gson gson = new Gson(); // Gson instance for JSON handling
     private static final int MAX_RETRIES = 3; // Maximum number of retry attempts
     private final ForkResolution forkResolution; // Added ForkResolution reference
+    private final int gossipInterval = 60000; // Gossip interval in milliseconds
 
     public NetworkManager(PublicKey localPublicKey, ForkResolution forkResolution) {
         this.localPublicKey = localPublicKey;
@@ -163,7 +164,7 @@ public class NetworkManager {
         networkPool.submit(() -> {
             while (true) {
                 try {
-                    Thread.sleep(60000); // Gossip every 20 seconds
+                    Thread.sleep(gossipInterval);
                     gossip();
                 } catch (InterruptedException e) {
                     System.err.println("Gossiping thread interrupted: " + e.getMessage());
@@ -176,24 +177,13 @@ public class NetworkManager {
         });
     }
 
-    // Method to stop gossiping if needed
-    public void stopGossiping() {
-        if (!scheduler.isShutdown()) {
-            scheduler.shutdown();
-        }
-    }
-
-
     // Gossip the peer list to all connected peers
     private void gossip() {
         if (peers.isEmpty()) {
             System.out.println("No peers to gossip with.");
-            return; // No peers to gossip with
+            return;
         }
-
         System.out.println("Gossiping peer list to connected peers.");
-
-        // Send the peer list to all connected peers
         peers.forEach((publicKey, peerInfo) -> {
             if (peerInfo.isConnected()) {
                 try {
@@ -204,12 +194,10 @@ public class NetworkManager {
                     peerInfo.setConnected(false);
                 }
             } else {
-                // Print PeerInfo before skipping gossip
                 System.out.println("PeerInfo before skipping gossip:");
                 System.out.println("IP Address: " + peerInfo.getIpAddress());
                 System.out.println("Is Connected: " + peerInfo.isConnected());
                 System.out.println("Socket: " + peerInfo.getSocket());
-
                 System.out.println("Skipping gossip to " + peerInfo.getIpAddress() + " because it's marked as disconnected.");
             }
         });
@@ -240,11 +228,10 @@ public class NetworkManager {
         if (socket == null || socket.isClosed()) {
             throw new IOException("Socket is not available or closed.");
         }
-
         try {
             PrintWriter output = new PrintWriter(socket.getOutputStream(), true);
             String messageJson = gson.toJson(message);
-            output.println(messageJson); // Send message
+            output.println(messageJson);
             System.out.println("Sent message to peer " + socket.getInetAddress().getHostAddress());
         } catch (IOException e) {
             System.err.println("Failed to send message to peer at " + socket.getInetAddress().getHostAddress() + ": " + e.getMessage());

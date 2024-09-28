@@ -164,14 +164,19 @@ public class Node implements Runnable{
     // Instead of directly adding the block to the blockchain, we use ForkResolution
     private void handleNewBlock(Message receivedMsg) {
         Block receivedBlock = gson.fromJson(receivedMsg.getData(), Block.class);
+        // Filter transaction sender and recipient strings after deserialization
+        for (Transaction transaction : receivedBlock.getTransactions()) {
+            transaction.sender = transaction.sender.replace("\\u003d", "=");
+            transaction.recipient = transaction.recipient.replace("\\u003d", "=");
+        }
         if (receivedBlockHashes.contains(receivedBlock.getHash())) {
                 System.out.println("Block already received: " + receivedBlock.getHash());
                 return;
-            }
-            // Add the block to ForkResolution for processing, rather than adding it directly to the blockchain
-            forkResolution.addBlock(receivedBlock);
-            log("Block forwarded to ForkResolution for further processing.");
-            networkManager.broadcastMessageExceptSender(receivedMsg, peerIp); // Broadcast to others except sender
+        }
+        // Add the block to ForkResolution for processing, rather than adding it directly to the blockchain
+        forkResolution.addBlock(receivedBlock);
+        log("Block forwarded to ForkResolution for further processing.");
+        networkManager.broadcastMessageExceptSender(receivedMsg, peerIp); // Broadcast to others except sender
     }
 
     private void handleBlockchainRequest() {
