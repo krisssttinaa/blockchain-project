@@ -8,10 +8,11 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+//import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+//import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import static blockchain.Main.NODE_PORT;
-import static blockchain.Main.unconfirmedTransactions;
 import static blockchain.Blockchain.receivedBlockHashes;
 
 public class Node implements Runnable{
@@ -25,9 +26,11 @@ public class Node implements Runnable{
     private PrintWriter output;
     private final Gson gson = new Gson(); // Use standard Gson since we're using Strings for public keys
     private final String peerIp;
-    private String peerPublicKey; // Store peer's public key as a string
-    private boolean connected = true; // Track connection status
+    private volatile boolean connected = true; // Ensure visibility across threads
     private boolean publicKeyExchanged = false; // Ensure public keys are exchanged
+    //private final BlockingQueue<Message> messageQueue = new LinkedBlockingQueue<>(); // Blocking queue
+    //private volatile boolean running = true;
+    //private final Thread workerThread;
     public Node(Socket socket, Blockchain blockchain, NetworkManager networkManager, ForkResolution forkResolution) {
         this.nodeId = idCounter.incrementAndGet();
         this.socket = socket;
@@ -45,6 +48,8 @@ public class Node implements Runnable{
             connected = false;
             log("Failed to establish connection with " + peerIp + ": " + e.getMessage());
         }
+        //this.workerThread = new Thread(this::processMessages);
+        //workerThread.start();
     }
 
     @Override
@@ -62,12 +67,19 @@ public class Node implements Runnable{
                         log("Public key not exchanged yet with " + peerIp + ". Ignoring message of type: " + receivedMsg.getType());
                     }
                 } else {
+                    /*
+                    try {
+                        messageQueue.put(receivedMsg);  // Blocks until space is available
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();  // Restore the interrupt status
+                        log("Thread interrupted while adding message to queue.");
+                    }*/
                     handleNetworkMessage(receivedMsg);
                 }
             }
         } catch (IOException e) {
             log("Failed to read message from " + peerIp + ": " + e.getMessage());
-            //handleDisconnection();
+            handleDisconnection();
         }
     }
 
@@ -95,7 +107,8 @@ public class Node implements Runnable{
     }
 
     private void handlePublicKeyExchange(Message message) {
-        this.peerPublicKey = message.getData(); // Store peer's public key as a string
+        // Store peer's public key as a string
+        String peerPublicKey = message.getData(); // Store peer's public key as a string
         publicKeyExchanged = true;
         storePeerInfo(peerPublicKey); // Store peer info in the network manager
         log("Public key exchanged with peer: " + peerIp);
@@ -133,7 +146,7 @@ public class Node implements Runnable{
         log("Received NEW_TRANSACTION message.");
         try {
             Transaction transaction = gson.fromJson(receivedMsg.getData(), Transaction.class);
-            if (Main.receivedTransactions.containsKey(transaction.transactionId)) {
+            if (blockchain.getReceivedTransactions().containsKey(transaction.transactionId)) {
                 log("Transaction " + transaction.transactionId + " already processed. Ignoring...");
                 return;
             }
@@ -146,7 +159,7 @@ public class Node implements Runnable{
                 networkManager.broadcastMessageExceptSender(receivedMsg, peerIp);
                 log("Transaction broadcast to peers.");
                 // Step 2: Check if we need to mine
-                if (unconfirmedTransactions.size() >= Main.numTransactionsToMine) {
+                if (blockchain.getUnconfirmedTransactions().size() >= Main.numTransactionsToMine) {
                     log("Mining 2 pending transactions...");
                     blockchain.startMining(Main.numTransactionsToMine, forkResolution);
                 }
@@ -234,6 +247,10 @@ public class Node implements Runnable{
         }
     }
 
+    private void log(String message) {
+        System.out.println("Node-" + nodeId + ": " + message);
+    }
+
     private void handleDisconnection() {
         connected = false;
         log("Handling disconnection from " + peerIp);
@@ -245,7 +262,35 @@ public class Node implements Runnable{
         }
     }
 
-    private void log(String message) {
-        System.out.println("Node-" + nodeId + ": " + message);
+    /*
+    private void processMessages() {
+        while (running && connected) {
+            try {
+                Message message = messageQueue.take(); // This blocks until a message is available
+                handleNetworkMessage(message);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
     }
+
+    private void handleDisconnection() {
+        connected = false;
+        running = false;
+        log("Handling disconnection from " + peerIp);
+        networkManager.updatePeerConnectionStatus(peerIp, false);
+        try {
+            socket.close();
+        } catch (IOException e) {
+            log("Failed to close socket: " + e.getMessage());
+        }
+        try {
+            workerThread.join(); // Wait for the worker thread to finish
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt(); // Restore the interrupt status
+            //In case the thread is interrupted during shutdown, it's good to set the interrupt status again
+            log("Worker thread interrupted during shutdown: " + e.getMessage());
+        }
+
+    }*/
 }

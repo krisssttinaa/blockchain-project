@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import static blockchain.Main.unconfirmedTransactions;
 
 public class BlockchainCLI {
     private final Blockchain blockchain;
@@ -75,14 +74,14 @@ public class BlockchainCLI {
             Transaction transaction = senderWallet.sendFunds(selectedPublicKey, amount);
             if (transaction != null && transaction.processTransaction()) {
                 blockchain.addTransaction(transaction);
-                Main.receivedTransactions.put(transaction.transactionId, true);
+                blockchain.getReceivedTransactions().put(transaction.transactionId, true);
                 networkManager.broadcastMessage(new Message(MessageType.NEW_TRANSACTION, new Gson().toJson(transaction)));
                 System.out.println("Transaction created and broadcast.");
                 // Step 2: Check if we need to mine a block
-                if (unconfirmedTransactions.size() >= Main.numTransactionsToMine) {
+                if (blockchain.getUnconfirmedTransactions().size() >= Main.numTransactionsToMine) {
                     blockchain.startMining(Main.numTransactionsToMine, forkResolution);
                 } else {
-                    System.out.println(unconfirmedTransactions.size() + " transactions in the pool, NOT ENOUGH.");
+                    System.out.println(blockchain.getUnconfirmedTransactions().size() + " transactions in the pool, NOT ENOUGH.");
                     //System.out.println("Not enough transactions to mine yet.");
                 }
             } else {

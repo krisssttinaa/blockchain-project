@@ -3,7 +3,6 @@ package blockchain;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 public class Transaction {
@@ -14,13 +13,15 @@ public class Transaction {
     public byte[] signature; // prevents others from spending funds in the sender's wallet
     public List<TransactionInput> inputs; // previous transaction outputs being used as inputs
     public List<TransactionOutput> outputs = new ArrayList<>(); // outputs created by this transaction
-    private static int sequence = 0; // to ensure transaction uniqueness
+    private int sequence = 0; // to ensure transaction uniqueness
+    private Blockchain blockchain; // Reference to Blockchain instance
 
-    public Transaction(String from, String to, float value, List<TransactionInput> inputs) {
+    public Transaction(String from, String to, float value, List<TransactionInput> inputs, Blockchain blockchain) {
         this.sender = from;
         this.recipient = to;
         this.value = value;
         this.inputs = inputs;
+        this.blockchain = blockchain;
         transactionId= calculateHash();
     }
 
@@ -36,6 +37,70 @@ public class Transaction {
     public void generateSignature(PrivateKey privateKey) {
         String data = sender + recipient + value;
         signature = StringUtil.applyECDSASig(privateKey, data); // generate signature
+    }
+
+    // Process the transaction, updating UTXOs and checking for validity, including double-spending prevention
+    public boolean processTransaction() {
+        if (value == 0) {
+            System.out.println("Processing zero-value transaction.");
+            transactionId = calculateHash();
+            outputs.add(new TransactionOutput(recipient, value, transactionId));
+            blockchain.getUTXOs().put(outputs.get(0).id, outputs.get(0)); // Add to UTXOs in the Blockchain
+            return true;
+        }
+
+        // Step 1: Verify the signature
+        if (!verifySignature()) {
+            System.out.println("#Transaction Signature failed to verify");
+            return false;
+        }
+
+        // Step 2: Gather and validate transaction inputs
+        float inputSum = 0;
+        for (TransactionInput input : inputs) {
+            input.UTXO = blockchain.getUTXOs().get(input.transactionOutputId);
+            if (input.UTXO == null || !input.UTXO.isMine(sender)) {
+                System.out.println("#Referenced input is invalid or does not belong to the sender");
+                return false;
+            }
+            inputSum += input.UTXO.value;
+        }
+
+        // Step 3: Check for double-spending in the unconfirmed pool
+        for (Transaction pendingTx : blockchain.getUnconfirmedTransactions()) {
+            for (TransactionInput pendingInput : pendingTx.inputs) {
+                if (inputs.stream().anyMatch(i -> i.transactionOutputId.equals(pendingInput.transactionOutputId))) {
+                    System.out.println("#Input already spent in another unconfirmed transaction.");
+                    return false;
+                }
+            }
+        }
+
+        // Step 4: Check if inputs are sufficient to cover the value
+        if (inputSum < value) {
+            System.out.println("#Not enough input value to cover the transaction.");
+            return false;
+        }
+        // Check if the transaction meets the minimum transaction value
+        if (inputSum < Main.minimumTransaction) {
+            System.out.println("#Transaction Inputs too small: " + inputSum);
+            return false;
+        }
+
+        // Step 5: Generate outputs for recipient and sender
+        transactionId = calculateHash();
+        outputs.add(new TransactionOutput(recipient, value, transactionId));  // Recipient's output
+        outputs.add(new TransactionOutput(sender, inputSum - value, transactionId));  // Change back to sender
+
+        // Step 6: Update UTXOs
+        for (TransactionOutput output : outputs) {
+            blockchain.getUTXOs().put(output.id, output);  // Add outputs to UTXO pool
+        }
+        for (TransactionInput input : inputs) {
+            blockchain.getUTXOs().remove(input.transactionOutputId);  // Remove used UTXOs
+        }
+
+        return true;
     }
 
     // Verifies the transaction signature to ensure it was signed by the owner of the sender's private key
@@ -63,70 +128,6 @@ public class Transaction {
             e.printStackTrace();
             return false;
         }
-    }
-
-
-    // Process the transaction, updating UTXOs and checking for validity, include double-spending prevention
-    public boolean processTransaction() {
-        if (value == 0) {
-            System.out.println("Processing zero-value transaction.");
-            transactionId = calculateHash();
-            outputs.add(new TransactionOutput(recipient, value, transactionId));
-            return true;
-        }
-
-        // Step 1: Verify the signature
-        if (!verifySignature()) {
-            System.out.println("#Transaction Signature failed to verify");
-            return false;
-        }
-
-        // Step 2: Gather and validate transaction inputs
-        float inputSum = 0;
-        for (TransactionInput input : inputs) {
-            input.UTXO = Main.UTXOs.get(input.transactionOutputId);
-            if (input.UTXO == null || !input.UTXO.isMine(sender)) {
-                System.out.println("#Referenced input is invalid or does not belong to the sender");
-                return false;
-            }
-            inputSum += input.UTXO.value;
-        }
-
-        // Step 3: Check for double-spending in the unconfirmed pool
-        for (Transaction pendingTx : Main.unconfirmedTransactions) {
-            for (TransactionInput pendingInput : pendingTx.inputs) {
-                if (inputs.stream().anyMatch(i -> i.transactionOutputId.equals(pendingInput.transactionOutputId))) {
-                    System.out.println("#Input already spent in another unconfirmed transaction.");
-                    return false;
-                }
-            }
-        }
-
-        // Step 4: Check if inputs are sufficient to cover the value
-        if (inputSum < value) {
-            System.out.println("#Not enough input value to cover the transaction.");
-            return false;
-        }
-
-        // Check if the transaction meets the minimum transaction value
-        if (inputSum < Main.minimumTransaction) {
-            System.out.println("#Transaction Inputs too small: " + inputSum);
-            return false;
-        }
-
-        // Step 5: Generate outputs for recipient and sender
-        transactionId = calculateHash();
-        outputs.add(new TransactionOutput(recipient, value, transactionId));  // Recipient's output
-        outputs.add(new TransactionOutput(sender, inputSum - value, transactionId));  // Change back to sender
-
-        // Step 6: Update UTXOs
-        for (TransactionOutput output : outputs) {
-            Main.UTXOs.put(output.id, output);  // Add outputs to UTXO pool
-        }
-        for (TransactionInput input : inputs) {
-            Main.UTXOs.remove(input.transactionOutputId);  // Remove used UTXOs
-        }
-        return true;
     }
 
     // Ensure you have setters and getters for 'sender' and 'recipient' if needed
