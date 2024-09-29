@@ -42,6 +42,13 @@ public class Transaction {
 
     // Process the transaction, updating UTXOs and checking for validity, including double-spending prevention
     public boolean processTransaction() {
+        if ("COINBASE".equals(sender)) {
+            // Process the coinbase transaction
+            outputs.add(new TransactionOutput(recipient, value, transactionId));
+            Blockchain.UTXOs.put(outputs.get(0).id, outputs.get(0));
+            return true;
+        }
+
         if (value == 0) {
             System.out.println("Processing zero-value transaction.");
             transactionId = calculateHash();
@@ -60,6 +67,11 @@ public class Transaction {
             input.UTXO = Blockchain.UTXOs.get(input.transactionOutputId);
             if (input.UTXO == null || !input.UTXO.isMine(sender)) {
                 System.out.println("#Referenced input is invalid or does not belong to the sender");
+                return false;
+            }
+            // Ensure UTXO is mature enough to be spent (e.g., at least 5 confirmations)
+            if (input.UTXO.confirmations < 5) {
+                System.out.println("#UTXO is not mature enough to be spent. Required confirmations: 5");
                 return false;
             }
             inputSum += input.UTXO.value;

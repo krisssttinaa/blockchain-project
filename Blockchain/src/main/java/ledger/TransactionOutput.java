@@ -7,6 +7,7 @@ public class TransactionOutput {
     public String recipient; // recipient address as a string (previously PublicKey)
     public float value; // amount of coins
     public String parentTransactionId; // id of the transaction this output was created in
+    public int confirmations = 0;  // Number of blocks since this UTXO was created
 
     public TransactionOutput(String recipient, float value, String parentTransactionId) {
         this.recipient = recipient;
@@ -27,6 +28,7 @@ public class TransactionOutput {
                 ", recipient='" + recipient + '\'' +
                 ", value=" + value +
                 ", parentTransactionId='" + parentTransactionId + '\'' +
+                //", confirmations=" + confirmations +
                 '}';
     }
 }

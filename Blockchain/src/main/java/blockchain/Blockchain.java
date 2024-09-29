@@ -76,6 +76,7 @@ public class Blockchain {
                 Block newBlock = new Block(chain.size(), chain.get(chain.size() - 1).getHash(), transactionsToMine);
                 newBlock.mineBlock(difficulty);
                 forkResolution.addBlock(newBlock);  // Add block to ForkResolution for consensus
+                ageUTXOs();  // Increase confirmations of UTXOs
                 networkManager.broadcastMessage(new Message(MessageType.NEW_BLOCK, new Gson().toJson(newBlock)));
                 System.out.println("BROADCASTED");
             } else {
@@ -96,7 +97,6 @@ public class Blockchain {
                 return false;
             }
             // Check if block index and previous hash match the current chain
-            // Step 3: Normal Case - Check if the block can be added to the current chain
             if (block.getPreviousHash().equals(lastBlock.getHash()) && block.getIndex() == lastBlock.getIndex() + 1) {
                 return validateAndAddBlock(block);  // Valid sequential block, so add it
             }
@@ -130,7 +130,7 @@ public class Blockchain {
             }
             // Check if inputs refer to valid and unspent UTXOs
             for (TransactionInput input : transaction.getInputs()) {
-                TransactionOutput utxo = UTXOs.get(input.transactionOutputId);
+                TransactionOutput utxo = Blockchain.UTXOs.get(input.transactionOutputId);
                 if (utxo == null) {
                     System.out.println("Transaction input refers to a non-existent UTXO.");
                     return false;
@@ -149,6 +149,8 @@ public class Blockchain {
         updateUTXOs(block);
         // Step 5: Track the block's hash to prevent reprocessing
         addBlockHashToTracking(block.getHash());
+        // Step 6: Age UTXOs (increase the confirmations of existing UTXOs)
+        ageUTXOs();  // Increment confirmations for all UTXOs
         return true;
     }
 
@@ -201,11 +203,28 @@ public class Blockchain {
     // Update UTXO pool after adding a new block
     private void updateUTXOs(Block block) {
         for (Transaction transaction : block.getTransactions()) {
+            // 1. Remove the UTXOs referenced in the transaction's inputs
             for (TransactionInput input : transaction.getInputs()) {
-                UTXOs.remove(input.transactionOutputId);  // Remove spent UTXOs
+                Blockchain.UTXOs.remove(input.transactionOutputId);
             }
+            // 2. Add the UTXOs created by the transaction's outputs
             for (TransactionOutput output : transaction.getOutputs()) {
-                UTXOs.put(output.id, output);  // Add new UTXOs from the transaction outputs
+                Blockchain.UTXOs.put(output.id, output);
+            }
+        }
+    }
+
+    private synchronized void revertUTXOs(Block block) {
+        for (Transaction transaction : block.getTransactions()) {
+            // Revert outputs created by this block's transactions
+            for (TransactionOutput output : transaction.getOutputs()) {
+                Blockchain.UTXOs.remove(output.id);  // Remove the UTXO created by the block
+            }
+            // Re-add UTXOs that were spent by this block's transactions
+            for (TransactionInput input : transaction.getInputs()) {
+                if (input.UTXO != null) {
+                    Blockchain.UTXOs.put(input.transactionOutputId, input.UTXO);  // Restore spent UTXOs
+                }
             }
         }
     }
@@ -227,23 +246,9 @@ public class Blockchain {
             System.out.println("Cannot remove genesis block.");
         }
     }
-
-    // Revert UTXO changes made by a block
-    private synchronized void revertUTXOs(Block block) {
-        for (Transaction transaction : block.getTransactions()) {
-            // Revert outputs created by this block's transactions
-            for (TransactionOutput output : transaction.getOutputs()) {
-                UTXOs.remove(output.id);  // Remove the UTXO created by the block
-            }
-            // Re-add UTXOs that were spent by this block's transactions
-            for (TransactionInput input : transaction.getInputs()) {
-                if (input.UTXO != null) {
-                    UTXOs.put(input.transactionOutputId, input.UTXO);  // Re-add spent UTXOs
-                }
-            }
-        }
-    }
     public int getNumTransactionsToMine() {return numTransactionsToMine;}
     public Deque<String> getReceivedBlockHashes() {return receivedBlockHashes;}
     public LRUCache<String, Boolean> getReceivedTransactions() {return receivedTransactions;}
+    public void ageUTXOs() {for (TransactionOutput utxo : UTXOs.values()) {utxo.confirmations++;}}
+
 }
