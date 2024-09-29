@@ -9,7 +9,6 @@ public class Message {
         this.data = data;
     }
 
-    // Getters and Setters
     public MessageType getType() {return type;}
     public void setType(MessageType type) {this.type = type;}
     public String getData() {return data;}

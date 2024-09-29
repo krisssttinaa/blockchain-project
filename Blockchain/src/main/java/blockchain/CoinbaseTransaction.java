@@ -13,20 +13,13 @@ public class CoinbaseTransaction extends Transaction {
     // Since no inputs are involved, we override the method to skip UTXO validation
     @Override
     public boolean processTransaction() {
-        // Create the output for the reward
-        outputs.add(new TransactionOutput(this.recipient, value, transactionId));
+        outputs.add(new TransactionOutput(this.recipient, value, transactionId)); // Create the output for the reward
         Main.UTXOs.put(outputs.get(0).id, outputs.get(0)); // Add the reward UTXO to UTXOs
         return true;
     }
 
     @Override
-    public void generateSignature(PrivateKey privateKey) {
-        // No need for a signature as it's a mining reward
-    }
-
+    public void generateSignature(PrivateKey privateKey) {}
     @Override
-    public boolean verifySignature() {
-        // No signature to verify
-        return true;
-    }
+    public boolean verifySignature() {return true;}
 }

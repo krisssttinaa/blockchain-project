@@ -12,8 +12,6 @@ import java.net.Socket;
 import java.util.concurrent.ConcurrentHashMap;
 //import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import static blockchain.Blockchain.receivedBlockHashes;
 import static blockchain.Main.*;
 
 public class Node implements Runnable{
@@ -147,22 +145,18 @@ public class Node implements Runnable{
         log("Received NEW_TRANSACTION message.");
         try {
             Transaction transaction = gson.fromJson(receivedMsg.getData(), Transaction.class);
-            if (receivedTransactions.containsKey(transaction.transactionId)) {
+            if (blockchain.getReceivedTransactions().containsKey(transaction.transactionId)) {
                 log("Transaction " + transaction.transactionId + " already processed. Ignoring...");
                 return;
             }
-            log("Transaction deserialized successfully: " + transaction);
-
-            // Process the transaction and add it to the unconfirmed pool
+            //log("Transaction deserialized successfully: " + transaction);
             if (blockchain.addTransaction(transaction)) {
                 log("Transaction validated and added to pool.");
-                // Step 1: Broadcast the transaction to other peers
                 networkManager.broadcastMessageExceptSender(receivedMsg, peerIp);
                 log("Transaction broadcast to peers.");
-                // Step 2: Check if we need to mine
-                if (unconfirmedTransactions.size() >= Main.numTransactionsToMine) {
+                if (unconfirmedTransactions.size() >= blockchain.getNumTransactionsToMine()) {
                     log("Mining 2 pending transactions...");
-                    blockchain.startMining(Main.numTransactionsToMine, forkResolution);
+                    blockchain.startMining(blockchain.getNumTransactionsToMine(), forkResolution);
                 }
                 else {
                     log("Not enough transactions to mine yet.");
@@ -183,7 +177,7 @@ public class Node implements Runnable{
             transaction.sender = transaction.sender.replace("\\u003d", "=");
             transaction.recipient = transaction.recipient.replace("\\u003d", "=");
         }
-        if (receivedBlockHashes.contains(receivedBlock.getHash())) {
+        if (blockchain.getReceivedBlockHashes().contains(receivedBlock.getHash())) {
                 System.out.println("Block already received: " + receivedBlock.getHash());
                 return;
         }
@@ -204,7 +198,7 @@ public class Node implements Runnable{
     }
 
     private void handleSyncResponse(Message receivedMsg) {
-        Blockchain receivedBlockchain = gson.fromJson(receivedMsg.getData(), Blockchain.class);
+        //Blockchain receivedBlockchain = gson.fromJson(receivedMsg.getData(), Blockchain.class);
         //blockchain.compareAndReplace(receivedBlockchain);
     }
 

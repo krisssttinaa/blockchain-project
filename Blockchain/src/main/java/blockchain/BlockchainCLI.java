@@ -1,12 +1,12 @@
 package blockchain;
 
+import java.util.Map;
+import java.util.Scanner;
 import com.google.gson.Gson;
 import networking.Message;
 import networking.MessageType;
 import networking.NetworkManager;
 import networking.PeerInfo;
-import java.util.Map;
-import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -85,8 +85,8 @@ public class BlockchainCLI {
                 //networkManager.broadcastMessage(new Message(MessageType.NEW_TRANSACTION, new Gson().toJson(transaction)));
                 System.out.println("Transaction created and broadcast.");
                 // Step 2: Check if we need to mine a block
-                if (unconfirmedTransactions.size() >= Main.numTransactionsToMine) {
-                    blockchain.startMining(Main.numTransactionsToMine, forkResolution);
+                if (unconfirmedTransactions.size() >= blockchain.getNumTransactionsToMine()) {
+                    blockchain.startMining(blockchain.getNumTransactionsToMine(), forkResolution);
                 } else {
                     System.out.println(unconfirmedTransactions.size() + " transactions in the pool, NOT ENOUGH.");
                 }

@@ -18,7 +18,6 @@ public class TransactionOutput {
         return publicKey.equals(recipient);
     }
 
-
     @Override
     public String toString() {
         return "TransactionOutput{" +
