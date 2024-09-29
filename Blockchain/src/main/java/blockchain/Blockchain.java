@@ -229,6 +229,18 @@ public class Blockchain {
         }
     }
 
+    public void reAddTransactionsFromDiscardedBlocks(List<Block> discardedBlocks) {
+        for (Block block : discardedBlocks) {
+            for (Transaction transaction : block.getTransactions()) {
+                // Re-add transactions to the unconfirmed pool if they are still valid
+                if (transaction.isStillValid()) {
+                    Blockchain.unconfirmedTransactions.add(transaction);
+                    System.out.println("Re-added transaction: " + transaction.transactionId);
+                }
+            }
+        }
+    }
+
     public void setNetworkManager(NetworkManager networkManager) {this.networkManager = networkManager;}
     // Get the last block in the chain
     Block getLastBlock() {

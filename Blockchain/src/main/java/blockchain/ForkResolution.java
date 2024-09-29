@@ -95,9 +95,10 @@ public class ForkResolution implements Runnable {
     private void reorganizeChain(List<Block> competingChain) {
         System.out.println("Reorganizing chain due to a longer fork...");
         // Step 1: Rollback the current chain to the fork point.
-        rollbackToFork(competingChain.get(0).getIndex() - 1);
-
-        // Step 2: Validate and add the competing chain.
+        List<Block> discardedBlocks = rollbackToFork(competingChain.get(0).getIndex() - 1);
+        // Step 2: Re-add transactions from discarded blocks
+        blockchain.reAddTransactionsFromDiscardedBlocks(discardedBlocks);
+        // Step 3: Validate and add the competing chain.
         for (Block block : competingChain) {
             if (!blockchain.addAndValidateBlock(block)) {
                 System.out.println("Fork block failed validation: " + block.getHash());
@@ -107,12 +108,17 @@ public class ForkResolution implements Runnable {
         }
     }
 
-    // Rollback the blockchain to a certain index (fork point)
-    private void rollbackToFork(int forkIndex) {
+    // Rollback the blockchain to a certain index (fork point), returning discarded blocks
+    private List<Block> rollbackToFork(int forkIndex) {
         System.out.println("Rolling back chain to index: " + forkIndex);
+        List<Block> discardedBlocks = new ArrayList<>();
         while (blockchain.getLastBlock().getIndex() > forkIndex) {
+            Block discardedBlock = blockchain.getLastBlock();
+            discardedBlocks.add(discardedBlock);  // Track the discarded block
             blockchain.removeLastBlock();  // Remove the last block from the chain
+            System.out.println("Discarded block: " + discardedBlock.getHash());
         }
+        return discardedBlocks;
     }
 
     public void addBlock(Block block) {blockQueue.add(block);}

@@ -133,6 +133,17 @@ public class Transaction {
         }
     }
 
+    public boolean isStillValid() {
+        // Check that the transaction's inputs have not been spent in the current UTXO set
+        for (TransactionInput input : this.inputs) {
+            TransactionOutput utxo = Blockchain.UTXOs.get(input.transactionOutputId);
+            if (utxo == null || !utxo.isMine(this.sender)) {
+                return false;  // Transaction is not valid if the input has already been spent
+            }
+        }
+        return true;  // The transaction is still valid
+    }
+
     // Returns the total value of inputs (UTXOs) in the transaction
     public float getInputsValue() {
         float total = 0;
