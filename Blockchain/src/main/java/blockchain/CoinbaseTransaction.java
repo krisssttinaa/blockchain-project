@@ -4,10 +4,9 @@ import java.security.PrivateKey;
 import java.util.ArrayList;
 
 public class CoinbaseTransaction extends Transaction {
-    private final Blockchain blockchain;
-    public CoinbaseTransaction(String recipient, float reward, Blockchain blockchain) {
-        super("COINBASE", recipient, reward, new ArrayList<>(), blockchain);
-        this.blockchain=blockchain;
+
+    public CoinbaseTransaction(String recipient, float reward) {
+        super("COINBASE", recipient, reward, new ArrayList<>());
         this.transactionId = calculateHash();  // Assign unique transaction ID
     }
 
@@ -16,7 +15,7 @@ public class CoinbaseTransaction extends Transaction {
     public boolean processTransaction() {
         // Create the output for the reward
         outputs.add(new TransactionOutput(this.recipient, value, transactionId));
-        blockchain.getUTXOs().put(outputs.get(0).id, outputs.get(0)); // Add the reward UTXO to the blockchain's UTXO pool
+        Main.UTXOs.put(outputs.get(0).id, outputs.get(0)); // Add the reward UTXO to UTXOs
         return true;
     }
 

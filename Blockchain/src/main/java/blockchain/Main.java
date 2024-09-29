@@ -1,5 +1,6 @@
 package blockchain;
 
+import networking.LRUCache;
 import networking.NetworkManager;
 import java.net.Inet4Address;
 import java.net.InetAddress;
@@ -7,12 +8,17 @@ import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.security.Security;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class Main {
+    public static final ConcurrentHashMap<String, TransactionOutput> UTXOs = new ConcurrentHashMap<>(); // Instance-level UTXO pool
+    public static ConcurrentLinkedQueue<Transaction> unconfirmedTransactions = new ConcurrentLinkedQueue<>(); // Unconfirmed transaction pool using ConcurrentLinkedQueue
     public static float minimumTransaction = 0; // Minimum transaction value
     public static int difficulty = 6; // Mining difficulty
     private static final String SEED_NODE_ADDRESS = "172.18.0.2"; // Seed node for peer-to-peer networking
     public static final int NODE_PORT = 7777;
+    public static LRUCache<String, Boolean> receivedTransactions = new LRUCache<>(500); // Capacity of 500
     public static String minerAddress;
     public static float miningReward = 6.00f;
     public static int numTransactionsToMine = 2; // Number of transactions to mine in a block
@@ -26,7 +32,7 @@ public class Main {
             Thread forkThread = new Thread(forkResolution); // Fork resolution thread
             forkThread.start();
 
-            Wallet senderWallet = new Wallet(blockchain); // Wallet for the current node
+            Wallet senderWallet = new Wallet(); // Wallet for the current node
             minerAddress = StringUtil.getStringFromKey(senderWallet.publicKey); // Convert PublicKey to String
             NetworkManager networkManager = new NetworkManager(senderWallet.publicKey, forkResolution); // No blockchain yet
             blockchain.setNetworkManager(networkManager);

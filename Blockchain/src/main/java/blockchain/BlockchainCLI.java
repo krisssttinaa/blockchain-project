@@ -10,6 +10,8 @@ import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import static blockchain.Main.unconfirmedTransactions;
+
 public class BlockchainCLI {
     private final Blockchain blockchain;
     private final Wallet senderWallet;
@@ -74,15 +76,19 @@ public class BlockchainCLI {
             Transaction transaction = senderWallet.sendFunds(selectedPublicKey, amount);
             if (transaction != null && transaction.processTransaction()) {
                 blockchain.addTransaction(transaction);
-                blockchain.getReceivedTransactions().put(transaction.transactionId, true);
-                networkManager.broadcastMessage(new Message(MessageType.NEW_TRANSACTION, new Gson().toJson(transaction)));
+                // Serialize the full transaction object
+                String jsonTransaction = new Gson().toJson(transaction);
+
+                // Broadcast the serialized transaction
+                networkManager.broadcastMessage(new Message(MessageType.NEW_TRANSACTION, jsonTransaction));
+
+                //networkManager.broadcastMessage(new Message(MessageType.NEW_TRANSACTION, new Gson().toJson(transaction)));
                 System.out.println("Transaction created and broadcast.");
                 // Step 2: Check if we need to mine a block
-                if (blockchain.getUnconfirmedTransactions().size() >= Main.numTransactionsToMine) {
+                if (unconfirmedTransactions.size() >= Main.numTransactionsToMine) {
                     blockchain.startMining(Main.numTransactionsToMine, forkResolution);
                 } else {
-                    System.out.println(blockchain.getUnconfirmedTransactions().size() + " transactions in the pool, NOT ENOUGH.");
-                    //System.out.println("Not enough transactions to mine yet.");
+                    System.out.println(unconfirmedTransactions.size() + " transactions in the pool, NOT ENOUGH.");
                 }
             } else {
                 System.out.println("Transaction failed.");

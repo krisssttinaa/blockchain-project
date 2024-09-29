@@ -15,15 +15,12 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-
 import static blockchain.Main.NODE_PORT;
 
 public class NetworkManager {
     private final Map<String, PeerInfo> peers = new ConcurrentHashMap<>(); // Store PeerInfo by public key
     private final ExecutorService networkPool = Executors.newCachedThreadPool(); // Thread pool for networking tasks
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1); // Creates a single-thread scheduler
-    private Blockchain blockchain; // Removed from constructor, set later
+    private Blockchain blockchain;
     private final PublicKey localPublicKey;
     private final Gson gson = new Gson(); // Gson instance for JSON handling
     private static final int MAX_RETRIES = 3; // Maximum number of retry attempts
@@ -73,7 +70,6 @@ public class NetworkManager {
 
     private void handleNewConnection(Socket socket) {
         String peerIp = socket.getInetAddress().getHostAddress();
-
         synchronized (peers) {
             // Check if there's already a connected peer with the same IP
             Optional<PeerInfo> existingPeerInfo = peers.values().stream()

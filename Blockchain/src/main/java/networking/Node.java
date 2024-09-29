@@ -12,8 +12,9 @@ import java.net.Socket;
 import java.util.concurrent.ConcurrentHashMap;
 //import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
-import static blockchain.Main.NODE_PORT;
+
 import static blockchain.Blockchain.receivedBlockHashes;
+import static blockchain.Main.*;
 
 public class Node implements Runnable{
     private static final AtomicInteger idCounter = new AtomicInteger(0); // Unique ID generator for nodes
@@ -146,7 +147,7 @@ public class Node implements Runnable{
         log("Received NEW_TRANSACTION message.");
         try {
             Transaction transaction = gson.fromJson(receivedMsg.getData(), Transaction.class);
-            if (blockchain.getReceivedTransactions().containsKey(transaction.transactionId)) {
+            if (receivedTransactions.containsKey(transaction.transactionId)) {
                 log("Transaction " + transaction.transactionId + " already processed. Ignoring...");
                 return;
             }
@@ -159,7 +160,7 @@ public class Node implements Runnable{
                 networkManager.broadcastMessageExceptSender(receivedMsg, peerIp);
                 log("Transaction broadcast to peers.");
                 // Step 2: Check if we need to mine
-                if (blockchain.getUnconfirmedTransactions().size() >= Main.numTransactionsToMine) {
+                if (unconfirmedTransactions.size() >= Main.numTransactionsToMine) {
                     log("Mining 2 pending transactions...");
                     blockchain.startMining(Main.numTransactionsToMine, forkResolution);
                 }

@@ -7,10 +7,8 @@ import java.util.ArrayList;
 public class Wallet {
     public PrivateKey privateKey;
     public PublicKey publicKey;
-    private Blockchain blockchain; // Reference to Blockchain instance
 
-    public Wallet(Blockchain blockchain) {
-        this.blockchain = blockchain;
+    public Wallet() {
         generateKeyPair();
     }
 
@@ -32,7 +30,7 @@ public class Wallet {
 
     public float getBalance() {
         float total = 0;
-        for (TransactionOutput utxo : blockchain.getUTXOs().values()) {
+        for (TransactionOutput utxo : Main.UTXOs.values()) {
             if (utxo.isMine(StringUtil.getStringFromKey(publicKey))) {
                 total += utxo.value;
             }
@@ -48,7 +46,7 @@ public class Wallet {
 
         ArrayList<TransactionInput> inputs = new ArrayList<>();
         float total = 0;
-        for (TransactionOutput utxo : blockchain.getUTXOs().values()) {
+        for (TransactionOutput utxo : Main.UTXOs.values()) {
             if (utxo.isMine(StringUtil.getStringFromKey(publicKey))) {
                 total += utxo.value;
                 inputs.add(new TransactionInput(utxo.id));
@@ -56,14 +54,12 @@ public class Wallet {
             }
         }
 
-        Transaction newTransaction = new Transaction(StringUtil.getStringFromKey(publicKey), recipient, value, inputs, blockchain);
+        Transaction newTransaction = new Transaction(StringUtil.getStringFromKey(publicKey), recipient, value, inputs);
         newTransaction.generateSignature(privateKey);
 
-        // Remove the inputs used for this transaction from the UTXO pool
         for (TransactionInput input : inputs) {
-            blockchain.getUTXOs().remove(input.transactionOutputId);
+            Main.UTXOs.remove(input.transactionOutputId);
         }
-
         return newTransaction;
     }
 }

@@ -2,20 +2,21 @@ package blockchain;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import networking.LRUCache;
 import networking.Message;
 import networking.MessageType;
 import networking.NetworkManager;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import static blockchain.Main.UTXOs;
 
 public class Blockchain {
-    private final ConcurrentHashMap<String, TransactionOutput> UTXOs = new ConcurrentHashMap<>(); // Instance-level UTXO pool
-    public ConcurrentLinkedQueue<Transaction> unconfirmedTransactions = new ConcurrentLinkedQueue<>(); // Unconfirmed transaction pool using ConcurrentLinkedQueue
     private final List<Block> chain;
     private static final int MAX_HASH_COUNT = 300;  // Keep only the last 300 block hashes, track only the most recent block hashes
     public static Deque<String> receivedBlockHashes = new ConcurrentLinkedDeque<>(); // Track recent block hashes
-    public LRUCache<String, Boolean> receivedTransactions = new LRUCache<>(500); // Capacity of 500
     private final ExecutorService miningExecutor = Executors.newSingleThreadExecutor(); // A single thread for mining
     private NetworkManager networkManager;
 
@@ -33,14 +34,14 @@ public class Blockchain {
     // Add a transaction to the global unconfirmed pool in Main
     public synchronized boolean addTransaction(Transaction transaction) {
         if (transaction.value == 0) {
-            unconfirmedTransactions.add(transaction);
-            receivedTransactions.put(transaction.transactionId, Boolean.TRUE); // Add to received transactions cache
+            Main.unconfirmedTransactions.add(transaction);
+            Main.receivedTransactions.put(transaction.transactionId, Boolean.TRUE); // Add to received transactions cache
             System.out.println("Zero-value transaction added to the pool.");
             return true;
         }
         if (transaction.processTransaction()) {
-            unconfirmedTransactions.add(transaction);
-            receivedTransactions.put(transaction.transactionId, Boolean.TRUE); // Add to received transactions cache
+            Main.unconfirmedTransactions.add(transaction);
+            Main.receivedTransactions.put(transaction.transactionId, Boolean.TRUE); // Add to received transactions cache
             System.out.println("Transaction successfully added to the pool.");
             return true;
         } else {
@@ -51,17 +52,17 @@ public class Blockchain {
 
     // Mine n number of pending transactions from the pool in Main
     public synchronized void minePendingTransactions(int numTransactionsToMine, ForkResolution forkResolution) {
-            if (unconfirmedTransactions.size() >= numTransactionsToMine) {
+            if (Main.unconfirmedTransactions.size() >= numTransactionsToMine) {
                 System.out.println("Mining a new block with " + numTransactionsToMine + " pending transactions...");
                 // Step 1: Create a list to hold the transactions to be mined
                 List<Transaction> transactionsToMine = new ArrayList<>();
                 // Step 2: Create the coinbase transaction and add it first
-                Transaction coinbaseTransaction = new CoinbaseTransaction(Main.minerAddress, Main.miningReward, this);
+                Transaction coinbaseTransaction = new CoinbaseTransaction(Main.minerAddress, Main.miningReward);
                 coinbaseTransaction.processTransaction();  // Process the coinbase transaction
                 transactionsToMine.add(coinbaseTransaction);
                 // Step 3: Add other pending transactions from the pool
                 for (int i = 0; i < numTransactionsToMine; i++) {
-                    Transaction tx = unconfirmedTransactions.poll();
+                    Transaction tx = Main.unconfirmedTransactions.poll();
                     if (tx != null) {
                         transactionsToMine.add(tx);
                     }
@@ -74,7 +75,7 @@ public class Blockchain {
                 networkManager.broadcastMessage(new Message(MessageType.NEW_BLOCK, new Gson().toJson(newBlock)));
                 System.out.println("BROADCASTED");
             } else {
-                System.out.println(unconfirmedTransactions.size() + " transactions in the pool. Not enough transactions to mine yet.");
+                System.out.println(Main.unconfirmedTransactions.size() + " transactions in the pool. Not enough transactions to mine yet.");
             }
     }
 
@@ -208,9 +209,40 @@ public class Blockchain {
         }
     }
 
-    public ConcurrentHashMap<String, TransactionOutput> getUTXOs() {return UTXOs;}
-    public ConcurrentLinkedQueue<Transaction> getUnconfirmedTransactions() {return unconfirmedTransactions;}
-    public LRUCache<String, Boolean> getReceivedTransactions() {return receivedTransactions;}
+    // This method will help with chain reorganization during fork resolution
+    public synchronized void reorganizeChain(List<Block> newChain) {
+        System.out.println("Reorganizing chain to match the fork.");
+
+        // Step 1: Remove blocks from the current chain until we reach the common ancestor
+        while (!chain.isEmpty() && !isCommonAncestor(chain.get(chain.size() - 1), newChain)) {
+            removeLastBlock();  // Remove the last block until we reach the common ancestor
+        }
+
+        // Step 2: Add the blocks from the new chain after the common ancestor
+        for (Block block : newChain) {
+            if (!addAndValidateBlock(block)) {
+                System.out.println("Failed to add block during chain reorganization: " + block.getHash());
+                break;
+            }
+        }
+
+        System.out.println("Chain reorganization complete.");
+    }
+
+    // Check if the block is a common ancestor in both chains
+    private boolean isCommonAncestor(Block currentChainBlock, List<Block> newChain) {
+        for (Block block : newChain) {
+            if (block.getHash().equals(currentChainBlock.getHash())) {
+                return true;  // Found the common ancestor
+            }
+        }
+        return false;
+    }
+
+    public ConcurrentHashMap<String, TransactionOutput> getUTXOs() {
+        return UTXOs;
+    }
+
     /*
     // Validate the blockchain
     public boolean isValidChain() {
