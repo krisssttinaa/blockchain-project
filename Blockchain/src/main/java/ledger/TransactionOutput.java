@@ -1,4 +1,6 @@
-package blockchain;
+package ledger;
+
+import blockchain.StringUtil;
 
 public class TransactionOutput {
     public String id;

@@ -1,4 +1,6 @@
-package blockchain;
+package ledger;
+
+import blockchain.Blockchain;
 
 import java.security.PrivateKey;
 import java.util.ArrayList;
@@ -14,7 +16,7 @@ public class CoinbaseTransaction extends Transaction {
     @Override
     public boolean processTransaction() {
         outputs.add(new TransactionOutput(this.recipient, value, transactionId)); // Create the output for the reward
-        Main.UTXOs.put(outputs.get(0).id, outputs.get(0)); // Add the reward UTXO to UTXOs
+        Blockchain.UTXOs.put(outputs.get(0).id, outputs.get(0)); // Add the reward UTXO to UTXOs
         return true;
     }
 

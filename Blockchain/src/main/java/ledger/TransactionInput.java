@@ -1,4 +1,4 @@
-package blockchain;
+package ledger;
 
 public class TransactionInput {
     public final String transactionOutputId; // Reference to TransactionOutputs -> transactionId
