@@ -2,15 +2,14 @@ package blockchain;
 
 import java.util.Map;
 import java.util.Scanner;
-import com.google.gson.Gson;
-import networking.Message;
-import networking.MessageType;
+
 import networking.NetworkManager;
 import networking.PeerInfo;
+import ledger.Transaction;
+import ledger.Wallet;
+
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-
-import static blockchain.Main.unconfirmedTransactions;
 
 public class BlockchainCLI {
     private final Blockchain blockchain;
@@ -74,24 +73,11 @@ public class BlockchainCLI {
         try {
             // Step 1: Create a transaction from the sender wallet
             Transaction transaction = senderWallet.sendFunds(selectedPublicKey, amount);
-            if (transaction != null && transaction.processTransaction()) {
-                blockchain.addTransaction(transaction);
-                // Serialize the full transaction object
-                String jsonTransaction = new Gson().toJson(transaction);
-
-                // Broadcast the serialized transaction
-                networkManager.broadcastMessage(new Message(MessageType.NEW_TRANSACTION, jsonTransaction));
-
-                //networkManager.broadcastMessage(new Message(MessageType.NEW_TRANSACTION, new Gson().toJson(transaction)));
-                System.out.println("Transaction created and broadcast.");
-                // Step 2: Check if we need to mine a block
-                if (unconfirmedTransactions.size() >= blockchain.getNumTransactionsToMine()) {
-                    blockchain.startMining(blockchain.getNumTransactionsToMine(), forkResolution);
-                } else {
-                    System.out.println(unconfirmedTransactions.size() + " transactions in the pool, NOT ENOUGH.");
-                }
+            if (transaction != null) {
+                // Use the new method in Blockchain to handle adding, broadcasting, and mining
+                blockchain.handleNewTransaction(transaction, null, networkManager, forkResolution);
             } else {
-                System.out.println("Transaction failed.");
+                System.out.println("Transaction creation failed.");
             }
         } catch (Exception e) {
             System.err.println("An error occurred while sending the transaction: " + e.getMessage());

@@ -22,29 +22,23 @@ public class PeerInfo {
         printStateChange("Constructor (IP + Socket + isConnected)");
     }
 
-    public String getIpAddress() {return ipAddress;}
-
-    public void setIpAddress(String ipAddress) {
-        this.ipAddress = ipAddress;
-        printStateChange("setIpAddress");
-    }
-
     public boolean isConnected() {return isConnected;}
-
     public synchronized void setConnected(boolean connected) {
         boolean previousState = this.isConnected;
         this.isConnected = connected;
         printStateChange("setConnected", previousState, connected);
     }
-
     public Socket getSocket() {return socket;}
-
     public synchronized void setSocket(Socket socket) {
         Socket previousSocket = this.socket;
         this.socket = socket;
         printStateChange("setSocket", previousSocket, socket);
     }
-
+    public String getIpAddress() {return ipAddress;}
+    public void setIpAddress(String ipAddress) {
+        this.ipAddress = ipAddress;
+        printStateChange("setIpAddress");
+    }
 
     private void printStateChange(String method) {
         System.out.println("PeerInfo state changed via " + method + ". IP: " + ipAddress + ", isConnected: " + isConnected + ", Socket: " + socket);

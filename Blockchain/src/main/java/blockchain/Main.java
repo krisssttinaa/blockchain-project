@@ -1,19 +1,16 @@
 package blockchain;
 
 import networking.NetworkManager;
+import ledger.Wallet;
+
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.security.Security;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class Main {
-    public static final ConcurrentHashMap<String, TransactionOutput> UTXOs = new ConcurrentHashMap<>(); // Instance-level UTXO pool
-    public static ConcurrentLinkedQueue<Transaction> unconfirmedTransactions = new ConcurrentLinkedQueue<>(); // Unconfirmed transaction pool using ConcurrentLinkedQueue
-    public static float minimumTransaction = 0; // Minimum transaction value
     private static final String SEED_NODE_ADDRESS = "172.18.0.2"; // Seed node for peer-to-peer networking
     public static final int NODE_PORT = 7777;
     public static String minerAddress;
@@ -32,8 +29,6 @@ public class Main {
             NetworkManager networkManager = new NetworkManager(senderWallet.publicKey, forkResolution); // No blockchain yet
             blockchain.setNetworkManager(networkManager);
             networkManager.setBlockchain(blockchain);  // Ensure NetworkManager has Blockchain
-            networkManager.startServer();
-
             try {
                 String currentIp = getCurrentIp();
                 System.out.println("Current IP Address: " + currentIp);

@@ -3,16 +3,17 @@ package networking;
 import blockchain.*;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import ledger.Transaction;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
-//import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
-//import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import static blockchain.Main.*;
+//import java.util.concurrent.BlockingQueue;
+//import java.util.concurrent.LinkedBlockingQueue;
 
 public class Node implements Runnable{
     private static final AtomicInteger idCounter = new AtomicInteger(0); // Unique ID generator for nodes
@@ -82,6 +83,16 @@ public class Node implements Runnable{
         }
     }
 
+    private void handlePublicKeyExchange(Message message) {
+        // Store peer's public key as a string
+        String peerPublicKey = message.getData(); // Store peer's public key as a string
+        publicKeyExchanged = true;
+        storePeerInfo(peerPublicKey); // Store peer info in the network manager
+        log("Public key exchanged with peer: " + peerIp);
+        // Acknowledge the connection
+        sendMessage(new Message(MessageType.CONNECTION_ESTABLISHED, "Connection established with peer: " + peerIp));
+    }
+
     private void handleNetworkMessage(Message message) {
         switch (message.getType()) {
             case CONNECTION_ESTABLISHED -> handleConnectionEstablished();
@@ -105,42 +116,6 @@ public class Node implements Runnable{
         }
     }
 
-    private void handlePublicKeyExchange(Message message) {
-        // Store peer's public key as a string
-        String peerPublicKey = message.getData(); // Store peer's public key as a string
-        publicKeyExchanged = true;
-        storePeerInfo(peerPublicKey); // Store peer info in the network manager
-        log("Public key exchanged with peer: " + peerIp);
-
-        // Acknowledge the connection
-        sendMessage(new Message(MessageType.CONNECTION_ESTABLISHED, "Connection established with peer: " + peerIp));
-    }
-
-    private void handleSharePeerList(Message receivedMsg) {
-        log("Received gossip from peer: " + peerIp);
-        ConcurrentHashMap<String, PeerInfo> receivedPeers = gson.fromJson(receivedMsg.getData(), new TypeToken<ConcurrentHashMap<String, PeerInfo>>(){}.getType());
-
-        String localPublicKeyString = networkManager.getLocalPublicKey();
-
-        receivedPeers.forEach((publicKey, peerInfo) -> {
-            if (!publicKey.equals(localPublicKeyString)) {
-                networkManager.getPeers().compute(publicKey, (key, existingPeerInfo) -> {
-                    if (existingPeerInfo == null) {
-                        log("New peer added (disconnected): " + publicKey + " with IP: " + peerInfo.getIpAddress());
-                        networkManager.connectToPeer(peerInfo.getIpAddress(), NODE_PORT);
-                        return new PeerInfo(peerInfo.getIpAddress(), false);
-                    } else if (!existingPeerInfo.isConnected() && peerInfo.isConnected()) {
-                        log("Updating peer info with better connection state: " + publicKey);
-                        networkManager.connectToPeer(peerInfo.getIpAddress(), NODE_PORT);
-                        return new PeerInfo(peerInfo.getIpAddress(), true);
-                    }
-                    return existingPeerInfo;
-                });
-            }
-        });
-        log("Updated peer list after receiving gossip.");
-    }
-
     private void handleNewTransaction(Message receivedMsg) {
         log("Received NEW_TRANSACTION message.");
         try {
@@ -149,27 +124,12 @@ public class Node implements Runnable{
                 log("Transaction " + transaction.transactionId + " already processed. Ignoring...");
                 return;
             }
-            //log("Transaction deserialized successfully: " + transaction);
-            if (blockchain.addTransaction(transaction)) {
-                log("Transaction validated and added to pool.");
-                networkManager.broadcastMessageExceptSender(receivedMsg, peerIp);
-                log("Transaction broadcast to peers.");
-                if (unconfirmedTransactions.size() >= blockchain.getNumTransactionsToMine()) {
-                    log("Mining 2 pending transactions...");
-                    blockchain.startMining(blockchain.getNumTransactionsToMine(), forkResolution);
-                }
-                else {
-                    log("Not enough transactions to mine yet.");
-                }
-            } else {
-                log("Transaction validation failed for transaction from " + peerIp + ".");
-            }
+            blockchain.handleNewTransaction(transaction, peerIp, networkManager, forkResolution);
         } catch (Exception e) {
             log("Error deserializing transaction: " + e.getMessage());
         }
     }
 
-    // Instead of directly adding the block to the blockchain, we use ForkResolution
     private void handleNewBlock(Message receivedMsg) {
         Block receivedBlock = gson.fromJson(receivedMsg.getData(), Block.class);
         // Filter transaction sender and recipient strings after deserialization
@@ -178,8 +138,8 @@ public class Node implements Runnable{
             transaction.recipient = transaction.recipient.replace("\\u003d", "=");
         }
         if (blockchain.getReceivedBlockHashes().contains(receivedBlock.getHash())) {
-                System.out.println("Block already received: " + receivedBlock.getHash());
-                return;
+            System.out.println("Block already received: " + receivedBlock.getHash());
+            return;
         }
         // Add the block to ForkResolution for processing, rather than adding it directly to the blockchain
         forkResolution.addBlock(receivedBlock);
@@ -217,6 +177,31 @@ public class Node implements Runnable{
         });
     }
 
+    private void handleSharePeerList(Message receivedMsg) {
+        log("Received gossip from peer: " + peerIp);
+        ConcurrentHashMap<String, PeerInfo> receivedPeers = gson.fromJson(receivedMsg.getData(), new TypeToken<ConcurrentHashMap<String, PeerInfo>>(){}.getType());
+
+        String localPublicKeyString = networkManager.getLocalPublicKey();
+
+        receivedPeers.forEach((publicKey, peerInfo) -> {
+            if (!publicKey.equals(localPublicKeyString)) {
+                networkManager.getPeers().compute(publicKey, (key, existingPeerInfo) -> {
+                    if (existingPeerInfo == null) {
+                        log("New peer added (disconnected): " + publicKey + " with IP: " + peerInfo.getIpAddress());
+                        networkManager.connectToPeer(peerInfo.getIpAddress(), NODE_PORT);
+                        return new PeerInfo(peerInfo.getIpAddress(), false);
+                    } else if (!existingPeerInfo.isConnected() && peerInfo.isConnected()) {
+                        log("Updating peer info with better connection state: " + publicKey);
+                        networkManager.connectToPeer(peerInfo.getIpAddress(), NODE_PORT);
+                        return new PeerInfo(peerInfo.getIpAddress(), true);
+                    }
+                    return existingPeerInfo;
+                });
+            }
+        });
+        log("Updated peer list after receiving gossip.");
+    }
+
     private void sendMessage(Message message) {
         if (socket != null && !socket.isClosed() && output != null) {
             String messageJson = gson.toJson(message);
@@ -242,10 +227,6 @@ public class Node implements Runnable{
         }
     }
 
-    private void log(String message) {
-        System.out.println("Node-" + nodeId + ": " + message);
-    }
-
     private void handleDisconnection() {
         connected = false;
         log("Handling disconnection from " + peerIp);
@@ -257,6 +238,9 @@ public class Node implements Runnable{
         }
     }
 
+    private void log(String message) {
+        System.out.println("Node-" + nodeId + ": " + message);
+    }
     /*
     private void processMessages() {
         while (running && connected) {

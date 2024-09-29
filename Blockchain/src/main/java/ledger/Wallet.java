@@ -1,11 +1,14 @@
-package blockchain;
+package ledger;
+
+import blockchain.Blockchain;
+import blockchain.StringUtil;
 
 import java.security.*;
 import java.security.spec.ECGenParameterSpec;
 import java.util.ArrayList;
 
 public class Wallet {
-    public PrivateKey privateKey;
+    private PrivateKey privateKey;
     public PublicKey publicKey;
 
     public Wallet() {
@@ -30,7 +33,7 @@ public class Wallet {
 
     public float getBalance() {
         float total = 0;
-        for (TransactionOutput utxo : Main.UTXOs.values()) {
+        for (TransactionOutput utxo : Blockchain.UTXOs.values()) {
             if (utxo.isMine(StringUtil.getStringFromKey(publicKey))) {
                 total += utxo.value;
             }
@@ -46,7 +49,7 @@ public class Wallet {
 
         ArrayList<TransactionInput> inputs = new ArrayList<>();
         float total = 0;
-        for (TransactionOutput utxo : Main.UTXOs.values()) {
+        for (TransactionOutput utxo : Blockchain.UTXOs.values()) {
             if (utxo.isMine(StringUtil.getStringFromKey(publicKey))) {
                 total += utxo.value;
                 inputs.add(new TransactionInput(utxo.id));
@@ -58,7 +61,7 @@ public class Wallet {
         newTransaction.generateSignature(privateKey);
 
         for (TransactionInput input : inputs) {
-            Main.UTXOs.remove(input.transactionOutputId);
+            Blockchain.UTXOs.remove(input.transactionOutputId);
         }
         return newTransaction;
     }

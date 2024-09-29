@@ -1,4 +1,4 @@
-package networking;
+package ledger;
 
 import java.util.LinkedHashMap;
 import java.util.Map;

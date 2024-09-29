@@ -1,8 +1,8 @@
 package networking;
 
 public class Message {
-    public MessageType type;
-    public String data;
+    private MessageType type;
+    private String data;
 
     public Message(MessageType type, String data) {
         this.type = type;

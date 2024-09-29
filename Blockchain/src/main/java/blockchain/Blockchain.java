@@ -3,27 +3,28 @@ package blockchain;
 import java.util.*;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import networking.LRUCache;
+import ledger.LRUCache;
 import networking.Message;
 import networking.MessageType;
 import networking.NetworkManager;
-import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
-import static blockchain.Main.UTXOs;
+import ledger.CoinbaseTransaction;
+import ledger.Transaction;
+import ledger.TransactionInput;
+import ledger.TransactionOutput;
+import java.util.concurrent.*;
 
 public class Blockchain {
+    public static final ConcurrentHashMap<String, TransactionOutput> UTXOs = new ConcurrentHashMap<>(); // Instance-level UTXO pool
+    public static ConcurrentLinkedQueue<Transaction> unconfirmedTransactions = new ConcurrentLinkedQueue<>(); // Unconfirmed transaction pool using ConcurrentLinkedQueue
     private final List<Block> chain;
-    private final Deque<String> receivedBlockHashes = new ConcurrentLinkedDeque<>(); // Track recent block hashes
-    private final ExecutorService miningExecutor = Executors.newSingleThreadExecutor(); // A single thread for mining
     private NetworkManager networkManager;
+    private final Deque<String> receivedBlockHashes = new ConcurrentLinkedDeque<>(); // Track recent block hashes
     private final LRUCache<String, Boolean> receivedTransactions = new LRUCache<>(500); // Capacity of 500
+    private final ExecutorService miningExecutor = Executors.newSingleThreadExecutor(); // A single thread for mining
     private final int numTransactionsToMine = 2; // Number of transactions to mine in a block
     private final float miningReward = 6.00f;
     private final int MAX_HASH_COUNT = 300;  // Keep only the last 300 block hashes, track only the most recent block hashes
     private final int difficulty = 6; // Mining difficulty
-
 
     public Blockchain() {
         this.chain = new ArrayList<>();
@@ -39,7 +40,7 @@ public class Blockchain {
     // Add a transaction to the global unconfirmed pool in Main
     public synchronized boolean addTransaction(Transaction transaction) {
         if (transaction.processTransaction()) {
-            Main.unconfirmedTransactions.add(transaction);
+            unconfirmedTransactions.add(transaction);
             receivedTransactions.put(transaction.transactionId, Boolean.TRUE); // Add to received transactions cache
             if (transaction.value == 0) {
                 System.out.println("Zero-value transaction added to the pool.");
@@ -53,9 +54,10 @@ public class Blockchain {
     }
 
     // Mine n number of pending transactions from the pool in Main
-    public synchronized void minePendingTransactions(int numTransactionsToMine, ForkResolution forkResolution) {
-            if (Main.unconfirmedTransactions.size() >= numTransactionsToMine) {
+    private synchronized void minePendingTransactions(int numTransactionsToMine, ForkResolution forkResolution) {
+            if (unconfirmedTransactions.size() >= numTransactionsToMine) {
                 System.out.println("Mining a new block with " + numTransactionsToMine + " pending transactions...");
+
                 // Step 1: Create a list to hold the transactions to be mined
                 List<Transaction> transactionsToMine = new ArrayList<>();
                 // Step 2: Create the coinbase transaction and add it first
@@ -64,7 +66,7 @@ public class Blockchain {
                 transactionsToMine.add(coinbaseTransaction);
                 // Step 3: Add other pending transactions from the pool
                 for (int i = 0; i < numTransactionsToMine; i++) {
-                    Transaction tx = Main.unconfirmedTransactions.poll();
+                    Transaction tx = unconfirmedTransactions.poll();
                     if (tx != null) {
                         transactionsToMine.add(tx);
                     }
@@ -77,7 +79,7 @@ public class Blockchain {
                 networkManager.broadcastMessage(new Message(MessageType.NEW_BLOCK, new Gson().toJson(newBlock)));
                 System.out.println("BROADCASTED");
             } else {
-                System.out.println(Main.unconfirmedTransactions.size() + " transactions in the pool. Not enough transactions to mine yet.");
+                System.out.println(unconfirmedTransactions.size() + " transactions in the pool. Not enough transactions to mine yet.");
             }
     }
 
@@ -111,7 +113,6 @@ public class Blockchain {
     }
 
     private synchronized boolean validateAndAddBlock(Block block) {
-        //System.out.println("=== Block Validation Start ===");
         // Step 1: Recalculate the block hash and check if it matches the provided hash
         String recalculatedHash = block.calculateHash();
         System.out.println("Recalculated block hash: " + recalculatedHash);
@@ -149,6 +150,38 @@ public class Blockchain {
         // Step 5: Track the block's hash to prevent reprocessing
         addBlockHashToTracking(block.getHash());
         return true;
+    }
+
+    // New method for adding a transaction and handling the logic for broadcasting and mining
+    public synchronized boolean handleNewTransaction(Transaction transaction, String peerIp, NetworkManager networkManager, ForkResolution forkResolution) {
+        // Step 1: Add the transaction
+        if (addTransaction(transaction)) {
+            System.out.println("Transaction validated and added to pool.");
+
+            // Step 2: Broadcast the transaction (skip the peer that sent it, if applicable)
+            String jsonTransaction = new Gson().toJson(transaction);
+            Message message = new Message(MessageType.NEW_TRANSACTION, jsonTransaction);
+            if (peerIp == null) {
+                // Broadcast to all peers (if peerIp is null, broadcast to everyone)
+                networkManager.broadcastMessage(message);
+            } else {
+                // Broadcast to all except the peer that sent it
+                networkManager.broadcastMessageExceptSender(message, peerIp);
+            }
+
+            // Step 3: Check if we need to start mining
+            if (unconfirmedTransactions.size() >= getNumTransactionsToMine()) {
+                System.out.println("Enough transactions in the pool. Starting mining...");
+                startMining(getNumTransactionsToMine(), forkResolution);
+            } else {
+                System.out.println(unconfirmedTransactions.size() + " transactions in the pool, NOT ENOUGH.");
+            }
+
+            return true;
+        } else {
+            System.out.println("Transaction failed to validate.");
+            return false;
+        }
     }
 
     // Add block hash to the tracking deque, ensuring its size stays within the limit
@@ -211,20 +244,6 @@ public class Blockchain {
         }
     }
     public int getNumTransactionsToMine() {return numTransactionsToMine;}
-
     public Deque<String> getReceivedBlockHashes() {return receivedBlockHashes;}
-
     public LRUCache<String, Boolean> getReceivedTransactions() {return receivedTransactions;}
-
-    /*
-        // Check if the block is a common ancestor in both chains
-    private boolean isCommonAncestor(Block currentChainBlock, List<Block> newChain) {
-        for (Block block : newChain) {
-            if (block.getHash().equals(currentChainBlock.getHash())) {
-                return true;  // Found the common ancestor
-            }
-        }
-        return false;
-    }
-    * */
 }

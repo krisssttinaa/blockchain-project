@@ -54,20 +54,6 @@ public class NetworkManager {
         });
     }
 
-    public void broadcastMessageExceptSender(Message message, String senderIp) {
-        peers.forEach((publicKey, peerInfo) -> {
-            // Avoid sending the message back to the original sender
-            if (!peerInfo.getIpAddress().equals(senderIp) && peerInfo.isConnected()) {
-                try {
-                    sendMessageToPeer(peerInfo.getSocket(), message); // Send the message to other peers
-                } catch (IOException e) {
-                    System.err.println("Failed to send message to peer " + peerInfo.getIpAddress() + ": " + e.getMessage());
-                    peerInfo.setConnected(false); // Mark the peer as disconnected if there was an issue
-                }
-            }
-        });
-    }
-
     private void handleNewConnection(Socket socket) {
         String peerIp = socket.getInetAddress().getHostAddress();
         synchronized (peers) {
@@ -219,6 +205,20 @@ public class NetworkManager {
         }
     }
 
+    public void broadcastMessageExceptSender(Message message, String senderIp) {
+        peers.forEach((publicKey, peerInfo) -> {
+            // Avoid sending the message back to the original sender
+            if (!peerInfo.getIpAddress().equals(senderIp) && peerInfo.isConnected()) {
+                try {
+                    sendMessageToPeer(peerInfo.getSocket(), message); // Send the message to other peers
+                } catch (IOException e) {
+                    System.err.println("Failed to send message to peer " + peerInfo.getIpAddress() + ": " + e.getMessage());
+                    peerInfo.setConnected(false); // Mark the peer as disconnected if there was an issue
+                }
+            }
+        });
+    }
+
     // Sends a message to a specific peer using an existing socket connection
     private void sendMessageToPeer(Socket socket, Message message) throws IOException {
         if (socket == null || socket.isClosed()) {
@@ -259,13 +259,9 @@ public class NetworkManager {
 
     public void setBlockchain(Blockchain blockchain) {this.blockchain = blockchain;}
     public String getLocalPublicKey() {return StringUtil.getStringFromKey(localPublicKey);}
-    public Map<String, PeerInfo> getPeers() {
-        return peers;
-    }
+    public Map<String, PeerInfo> getPeers() {return peers;}
     public PublicKey getPeerPublicKey(Socket socket) {return StringUtil.getKeyFromString(socket.getInetAddress().getHostAddress());}
-
-    // Utility method to get the local IP address
-    private String getLocalIPAddress() {
+    private String getLocalIPAddress() {// Utility method to get the local IP address
         try {
             return InetAddress.getLocalHost().getHostAddress();
         } catch (IOException e) {
