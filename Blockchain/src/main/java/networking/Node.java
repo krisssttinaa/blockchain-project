@@ -9,11 +9,11 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import static blockchain.Main.*;
-//import java.util.concurrent.BlockingQueue;
-//import java.util.concurrent.LinkedBlockingQueue;
 
 public class Node implements Runnable{
     private static final AtomicInteger idCounter = new AtomicInteger(0); // Unique ID generator for nodes
@@ -28,9 +28,9 @@ public class Node implements Runnable{
     private final String peerIp;
     private volatile boolean connected = true; // Ensure visibility across threads
     private boolean publicKeyExchanged = false; // Ensure public keys are exchanged
-    //private final BlockingQueue<Message> messageQueue = new LinkedBlockingQueue<>(); // Blocking queue
-    //private volatile boolean running = true;
-    //private final Thread workerThread;
+    private final BlockingQueue<Message> messageQueue = new LinkedBlockingQueue<>(); // Queue for incoming messages
+    private volatile boolean running = true;
+    private final Thread workerThread;
     public Node(Socket socket, Blockchain blockchain, NetworkManager networkManager, ForkResolution forkResolution) {
         this.nodeId = idCounter.incrementAndGet();
         this.socket = socket;
@@ -48,8 +48,8 @@ public class Node implements Runnable{
             connected = false;
             log("Failed to establish connection with " + peerIp + ": " + e.getMessage());
         }
-        //this.workerThread = new Thread(this::processMessages);
-        //workerThread.start();
+        this.workerThread = new Thread(this::processMessages);
+        workerThread.start();
     }
 
     @Override
@@ -67,14 +67,13 @@ public class Node implements Runnable{
                         log("Public key not exchanged yet with " + peerIp + ". Ignoring message of type: " + receivedMsg.getType());
                     }
                 } else {
-                    /*
                     try {
                         messageQueue.put(receivedMsg);  // Blocks until space is available
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();  // Restore the interrupt status
                         log("Thread interrupted while adding message to queue.");
-                    }*/
-                    handleNetworkMessage(receivedMsg);
+                    }
+                    //handleNetworkMessage(receivedMsg);
                 }
             }
         } catch (IOException e) {
@@ -238,10 +237,8 @@ public class Node implements Runnable{
         }
     }
 
-    private void log(String message) {
-        System.out.println("Node-" + nodeId + ": " + message);
-    }
-    /*
+    private void log(String message) {System.out.println("Node-" + nodeId + ": " + message);}
+
     private void processMessages() {
         while (running && connected) {
             try {
@@ -253,6 +250,7 @@ public class Node implements Runnable{
         }
     }
 
+    /*
     private void handleDisconnection() {
         connected = false;
         running = false;
@@ -270,6 +268,5 @@ public class Node implements Runnable{
             //In case the thread is interrupted during shutdown, it's good to set the interrupt status again
             log("Worker thread interrupted during shutdown: " + e.getMessage());
         }
-
     }*/
 }
