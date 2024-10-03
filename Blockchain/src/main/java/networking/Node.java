@@ -97,9 +97,6 @@ public class Node implements Runnable{
             case CONNECTION_ESTABLISHED -> handleConnectionEstablished();
             case NEW_TRANSACTION -> handleNewTransaction(message);
             case NEW_BLOCK -> handleNewBlock(message);
-            case BLOCKCHAIN_REQUEST -> handleBlockchainRequest();
-            case SYNC_REQUEST -> handleSyncRequest();
-            case SYNC_RESPONSE -> handleSyncResponse(message);
             case PEER_DISCOVERY_REQUEST -> handlePeerDiscoveryRequest();
             case PEER_DISCOVERY_RESPONSE -> handlePeerDiscoveryResponse(message);
             case SHARE_PEER_LIST -> handleSharePeerList(message);
@@ -144,21 +141,6 @@ public class Node implements Runnable{
         forkResolution.addBlock(receivedBlock);
         log("Block forwarded to ForkResolution for further processing.");
         networkManager.broadcastMessageExceptSender(receivedMsg, peerIp); // Broadcast to others except sender
-    }
-
-    private void handleBlockchainRequest() {
-        String blockchainJson = gson.toJson(blockchain);
-        sendMessage(new Message(MessageType.BLOCKCHAIN_RESPONSE, blockchainJson));
-    }
-
-    private void handleSyncRequest() {
-        String syncBlockchainJson = gson.toJson(blockchain);
-        sendMessage(new Message(MessageType.SYNC_RESPONSE, syncBlockchainJson));
-    }
-
-    private void handleSyncResponse(Message receivedMsg) {
-        //Blockchain receivedBlockchain = gson.fromJson(receivedMsg.getData(), Blockchain.class);
-        //blockchain.compareAndReplace(receivedBlockchain);
     }
 
     private void handlePeerDiscoveryRequest() {

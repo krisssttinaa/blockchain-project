@@ -3,6 +3,7 @@ package blockchain;
 import networking.NetworkManager;
 import ledger.Wallet;
 
+import java.io.File;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
@@ -14,21 +15,26 @@ public class Main {
     private static final String SEED_NODE_ADDRESS = "172.18.0.2"; // Seed node for peer-to-peer networking
     public static final int NODE_PORT = 7777;
     public static String minerAddress;
-
+    private static final String WALLET_FILE_PATH = "wallet.dat";  // Path for the wallet file
+    public static boolean syncTriggered = false; // Flag to track if the sync has been triggered
+    public static boolean isResuming;
     public static void main(String[] args) {
             System.out.println("Starting blockchain node...");
             Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
-            Blockchain blockchain = new Blockchain();  // NetworkManager is not set yet
+            // Check if wallet.dat exists to determine if the node is resuming or starting fresh
+            boolean isResuming = checkWalletFileExists();
 
+            Wallet senderWallet = new Wallet(); // Wallet for the current node
+            minerAddress = StringUtil.getStringFromKey(senderWallet.publicKey); // Convert PublicKey to String
+
+            Blockchain blockchain = new Blockchain();  // NetworkManager is not set yet
             ForkResolution forkResolution = new ForkResolution(blockchain);
             Thread forkThread = new Thread(forkResolution); // Fork resolution thread
             forkThread.start();
 
-            Wallet senderWallet = new Wallet(); // Wallet for the current node
-            minerAddress = StringUtil.getStringFromKey(senderWallet.publicKey); // Convert PublicKey to String
             NetworkManager networkManager = new NetworkManager(senderWallet.publicKey, forkResolution); // No blockchain yet
             blockchain.setNetworkManager(networkManager);
-            networkManager.setBlockchain(blockchain);  // Ensure NetworkManager has Blockchain
+            networkManager.setBlockchain(blockchain);
             try {
                 String currentIp = getCurrentIp();
                 System.out.println("Current IP Address: " + currentIp);
@@ -43,6 +49,17 @@ public class Main {
 
             BlockchainCLI cli = new BlockchainCLI(blockchain, senderWallet, networkManager, forkResolution);
             cli.start();
+    }
+
+    // Method to check if wallet.dat file exists and is not empty
+    private static boolean checkWalletFileExists() {
+        File walletFile = new File(WALLET_FILE_PATH);
+        if (walletFile.exists() && walletFile.length() > 0) {
+            System.out.println("Wallet file found. Node is resuming.");
+            return true;
+        }
+        System.out.println("No wallet file found. Starting fresh.");
+        return false;
     }
 
     // Method to get the current machine's IP address

@@ -74,7 +74,7 @@ public class StringUtil {
         return bytesToHex(sig);
     }
 
-    // Utilize this method to convert a byte array to an SHA-256 hash byte array
+    // Method to convert a byte array to an SHA-256 hash byte array
     public static byte[] applySha256(byte[] input) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

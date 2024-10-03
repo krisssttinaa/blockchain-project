@@ -224,14 +224,32 @@ public class NetworkManager {
         if (socket == null || socket.isClosed()) {
             throw new IOException("Socket is not available or closed.");
         }
-        try {
-            PrintWriter output = new PrintWriter(socket.getOutputStream(), true);
-            String messageJson = gson.toJson(message);
-            output.println(messageJson);
-            System.out.println("Sent message to peer " + socket.getInetAddress().getHostAddress());
-        } catch (IOException e) {
-            System.err.println("Failed to send message to peer at " + socket.getInetAddress().getHostAddress() + ": " + e.getMessage());
-            throw e;
+        // We add the retry mechanism here
+        int retryCount = 0;
+        boolean messageSent = false;
+
+        while (retryCount < MAX_RETRIES && !messageSent) {
+            try {
+                PrintWriter output = new PrintWriter(socket.getOutputStream(), true);
+                String messageJson = gson.toJson(message);
+                output.println(messageJson);
+                System.out.println("Sent message to peer " + socket.getInetAddress().getHostAddress());
+                messageSent = true;
+            } catch (IOException e) {
+                retryCount++;
+                System.err.println("Failed to send message to peer at " + socket.getInetAddress().getHostAddress() + " (Attempt " + retryCount + "): " + e.getMessage());
+
+                if (retryCount >= MAX_RETRIES) {
+                    System.err.println("Max retry attempts reached for peer. Removing peer.");
+                    String publicKey = StringUtil.getStringFromKey(getPeerPublicKey(socket));
+                    peers.remove(publicKey); // Remove the peer from the map after 3 failed attempts
+                }
+                try {
+                    Thread.sleep(2000); // Delay before retry
+                } catch (InterruptedException ex) {
+                    throw new RuntimeException(ex);
+                }
+            }
         }
     }
 

@@ -3,6 +3,7 @@ package ledger;
 import blockchain.Blockchain;
 import blockchain.StringUtil;
 
+import java.io.*;
 import java.security.*;
 import java.security.spec.ECGenParameterSpec;
 import java.util.ArrayList;
@@ -10,9 +11,16 @@ import java.util.ArrayList;
 public class Wallet {
     private PrivateKey privateKey;
     public PublicKey publicKey;
+    private static final String WALLET_FILE = "wallet.dat";  // File to store wallet keys
 
     public Wallet() {
-        generateKeyPair();
+        // If wallet file exists, load it, otherwise create a new wallet
+        if (new File(WALLET_FILE).exists()) {
+            loadWallet();
+        } else {
+            generateKeyPair();
+            saveWallet();
+        }
     }
 
     private void generateKeyPair() {
@@ -23,7 +31,6 @@ public class Wallet {
 
             keyGen.initialize(ecSpec, random);
             KeyPair keyPair = keyGen.generateKeyPair();
-
             privateKey = keyPair.getPrivate();
             publicKey = keyPair.getPublic();
         } catch (Exception e) {
@@ -31,7 +38,7 @@ public class Wallet {
         }
     }
 
-    public float getBalance() {
+    public float getBalance() { //needs to be changed
         float total = 0;
         for (TransactionOutput utxo : Blockchain.UTXOs.values()) {
             if (utxo.isMine(StringUtil.getStringFromKey(publicKey))) {
@@ -64,5 +71,30 @@ public class Wallet {
             Blockchain.UTXOs.remove(input.transactionOutputId);
         }
         return newTransaction;
+    }
+
+    // Save the wallet (keys) to a file
+    private void saveWallet() {
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(WALLET_FILE))) {
+            oos.writeObject(privateKey);
+            oos.writeObject(publicKey);
+            System.out.println("Wallet saved to " + WALLET_FILE);
+        } catch (IOException e) {
+            System.err.println("Error saving wallet: " + e.getMessage());
+        }
+    }
+
+    // Load the wallet (keys) from the file
+    private void loadWallet() {
+        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(WALLET_FILE))) {
+            privateKey = (PrivateKey) ois.readObject();
+            publicKey = (PublicKey) ois.readObject();
+            System.out.println("Wallet loaded from " + WALLET_FILE);
+        } catch (IOException | ClassNotFoundException e) {
+            System.err.println("Error loading wallet: " + e.getMessage());
+            // If loading fails, create new keys
+            generateKeyPair();
+            saveWallet();
+        }
     }
 }

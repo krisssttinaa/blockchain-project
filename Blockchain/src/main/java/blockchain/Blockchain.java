@@ -243,7 +243,7 @@ public class Blockchain {
 
     public void setNetworkManager(NetworkManager networkManager) {this.networkManager = networkManager;}
     // Get the last block in the chain
-    Block getLastBlock() {
+    public Block getLastBlock() {
         return chain.size() > 0 ? chain.get(chain.size() - 1) : null;
     }
     public List<Block> getChain() {return chain;}
