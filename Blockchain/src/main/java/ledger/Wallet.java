@@ -2,7 +2,6 @@ package ledger;
 
 import blockchain.Blockchain;
 import blockchain.StringUtil;
-
 import java.io.*;
 import java.security.*;
 import java.security.spec.ECGenParameterSpec;
@@ -38,7 +37,7 @@ public class Wallet {
         }
     }
 
-    public float getBalance() { //needs to be changed
+    public float getBalance() {
         float total = 0;
         for (TransactionOutput utxo : Blockchain.UTXOs.values()) {
             if (utxo.isMine(StringUtil.getStringFromKey(publicKey))) {

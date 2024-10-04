@@ -258,6 +258,19 @@ public class Blockchain {
             System.out.println("Cannot remove genesis block.");
         }
     }
+    public List<Block> getBlocksInRange(int startIndex, int endIndex) {
+        // Check for invalid ranges
+        if (startIndex < 0 || endIndex >= chain.size() || startIndex > endIndex) {
+            System.out.println("Invalid block range requested.");
+            return Collections.emptyList();  // Return an empty list for invalid ranges
+        }
+        if (startIndex == 0) {
+            startIndex = 1;
+        }
+        // Ensure the endIndex is within bounds
+        return new ArrayList<>(chain.subList(startIndex, Math.min(endIndex + 1, chain.size())));
+    }
+
     public int getNumTransactionsToMine() {return numTransactionsToMine;}
     public Deque<String> getReceivedBlockHashes() {return receivedBlockHashes;}
     public LRUCache<String, Boolean> getReceivedTransactions() {return receivedTransactions;}

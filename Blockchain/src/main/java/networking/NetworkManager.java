@@ -10,8 +10,7 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.security.PublicKey;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -264,27 +263,112 @@ public class NetworkManager {
         }
     }
 
-    public void updatePeerSocket(String peerIp, Socket socket) {
-        synchronized (peers) {
-            peers.values().stream()
-                    .filter(peerInfo -> peerInfo.getIpAddress().equals(peerIp))
-                    .forEach(peerInfo -> {
-                        System.out.println("Updating socket for peer " + peerIp + " to " + socket);
-                        peerInfo.setSocket(socket);
-                    });
+    // Request peer list from the seed node or any peer directly
+    public void requestPeerListFromSeedNode(String seedNodeIp) {
+        System.out.println("Requesting peer list from seed node: " + seedNodeIp);
+        PeerInfo seedNodePeer = peers.values().stream()
+                .filter(peerInfo -> peerInfo.getIpAddress().equals(seedNodeIp) && peerInfo.isConnected())
+                .findFirst()
+                .orElse(null);
+        if (seedNodePeer == null) {
+            System.err.println("No connected peer found for the seed node. Ensure the connection exists before requesting the peer list.");
+            return;
+        }
+        Socket seedNodeSocket = seedNodePeer.getSocket();
+        Message peerDiscoveryRequest = new Message(MessageType.PEER_DISCOVERY_REQUEST, "Requesting peer list from seed node");
+        try {
+            sendMessageToPeer(seedNodeSocket, peerDiscoveryRequest); // Reuse the existing connection
+        } catch (IOException e) {
+            System.err.println("Failed to request peer list from seed node: " + e.getMessage());
         }
     }
 
+    public void requestChainTipFromPeers() {
+        List<PeerInfo> connectedPeers = peers.values().stream()
+                .filter(PeerInfo::isConnected)
+                .toList();
+        if (connectedPeers.isEmpty()) {
+            System.err.println("No connected peers to request blockchain tip from.");
+            return;
+        }
+        // Pick a random peer from the connected peers
+        PeerInfo randomPeer = connectedPeers.get(new Random().nextInt(connectedPeers.size()));
+        // Send request for the blockchain tip to a specific peer
+        try {
+            requestTipFromPeer(randomPeer);  // Reusing the socket
+        } catch (IOException e) {
+            System.err.println("Failed to request tip from peer " + randomPeer.getIpAddress() + ": " + e.getMessage());
+        }
+    }
+
+    // Request tip from the chosen peer (using its socket)
+    public void requestTipFromPeer(PeerInfo peerInfo) throws IOException {
+        Socket peerSocket = peerInfo.getSocket();
+        if (peerSocket != null && !peerSocket.isClosed()) {
+            // We just send the message using the existing connection (no need for a new Node instance)
+            Message tipRequest = new Message(MessageType.TIP_REQUEST, "Requesting blockchain tip");
+
+            try {
+                sendMessageToPeer(peerSocket, tipRequest);  // Use the sendMessageToPeer method in NetworkManager
+                System.out.println("Blockchain tip request sent to peer: " + peerInfo.getIpAddress());
+            } catch (IOException e) {
+                System.err.println("Failed to send blockchain tip request to peer: " + peerInfo.getIpAddress());
+                throw e;
+            }
+        } else {
+            throw new IOException("Peer socket is unavailable or closed.");
+        }
+    }
+
+    // Syncing process
+    public void syncWithPeers(int latestIndex) {
+        int currentIndex = blockchain.getLastBlock().getIndex();
+        int blocksToFetch = latestIndex - currentIndex;
+
+        if (blocksToFetch <= 0) {
+            System.out.println("No blocks to sync. Already up to date.");
+            return;
+        }
+
+        System.out.println("Syncing " + blocksToFetch + " blocks from peers.");
+        List<PeerInfo> availablePeers = new ArrayList<>(peers.values());
+
+        // Divide the blocks to fetch across peers
+        int blocksPerPeer = Math.max(1, blocksToFetch / availablePeers.size());
+
+        for (int i = 0; i < availablePeers.size(); i++) {
+            PeerInfo peer = availablePeers.get(i);
+            int startIndex = currentIndex + i * blocksPerPeer;
+            int endIndex = Math.min(startIndex + blocksPerPeer, latestIndex);
+
+            if (peer.isConnected()) {
+                requestBlocksFromPeer(peer, startIndex, endIndex);
+            }
+        }
+    }
+
+    // Request specific block range from a peer
+    private void requestBlocksFromPeer(PeerInfo peer, int startIndex, int endIndex) {
+        System.out.println("Requesting blocks " + startIndex + " to " + endIndex + " from peer " + peer.getIpAddress());
+        // Prepare request data (startIndex and endIndex)
+        String requestData = startIndex + "," + endIndex;
+        Message blockRequest = new Message(MessageType.BLOCK_REQUEST, requestData);
+
+        try {
+            // Send request message to peer
+            sendMessageToPeer(peer.getSocket(), blockRequest);
+        } catch (IOException e) {
+            System.err.println("Failed to request blocks from peer " + peer.getIpAddress() + ": " + e.getMessage());
+        }
+    }
+    public boolean isPeerConnected(String ipAddress) {
+        Optional<PeerInfo> peerInfo = peers.values().stream()
+                .filter(p -> p.getIpAddress().equals(ipAddress))
+                .findFirst();
+        return peerInfo.isPresent() && peerInfo.get().isConnected();
+    }
     public void setBlockchain(Blockchain blockchain) {this.blockchain = blockchain;}
     public String getLocalPublicKey() {return StringUtil.getStringFromKey(localPublicKey);}
     public Map<String, PeerInfo> getPeers() {return peers;}
     public PublicKey getPeerPublicKey(Socket socket) {return StringUtil.getKeyFromString(socket.getInetAddress().getHostAddress());}
-    private String getLocalIPAddress() {// Utility method to get the local IP address
-        try {
-            return InetAddress.getLocalHost().getHostAddress();
-        } catch (IOException e) {
-            System.err.println("Failed to get local IP address: " + e.getMessage());
-            return "Unknown IP";
-        }
-    }
 }

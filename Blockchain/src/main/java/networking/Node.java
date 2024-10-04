@@ -9,13 +9,14 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import static blockchain.Main.*;
 
-public class Node implements Runnable{
+public class Node implements Runnable {
     private static final AtomicInteger idCounter = new AtomicInteger(0); // Unique ID generator for nodes
     private final int nodeId;
     private final Socket socket;
@@ -31,6 +32,7 @@ public class Node implements Runnable{
     private final BlockingQueue<Message> messageQueue = new LinkedBlockingQueue<>(); // Queue for incoming messages
     private volatile boolean running = true;
     private final Thread workerThread;
+
     public Node(Socket socket, Blockchain blockchain, NetworkManager networkManager, ForkResolution forkResolution) {
         this.nodeId = idCounter.incrementAndGet();
         this.socket = socket;
@@ -97,10 +99,72 @@ public class Node implements Runnable{
             case CONNECTION_ESTABLISHED -> handleConnectionEstablished();
             case NEW_TRANSACTION -> handleNewTransaction(message);
             case NEW_BLOCK -> handleNewBlock(message);
+            case TIP_REQUEST -> handleTipRequest();
+            case TIP_RESPONSE -> handleBlockchainTipResponse(message);
             case PEER_DISCOVERY_REQUEST -> handlePeerDiscoveryRequest();
-            case PEER_DISCOVERY_RESPONSE -> handlePeerDiscoveryResponse(message);
             case SHARE_PEER_LIST -> handleSharePeerList(message);
+            case BLOCK_REQUEST -> handleBlockRequest(message);  // NEW: Handle block request
+            case BLOCK_RESPONSE -> handleBlockResponse(message);  // NEW: Handle block response
             default -> log("Unknown message type received from " + peerIp + ": " + message.getType());
+        }
+    }
+
+    private void handleBlockRequest(Message message) {
+        try {
+            String requestData = message.getData(); // The data contains the startIndex and endIndex
+            String[] parts = requestData.split(",");
+            int startIndex = Integer.parseInt(parts[0]);
+            int endIndex = Integer.parseInt(parts[1]);
+
+            log("Received block request for range: " + startIndex + " to " + endIndex + " from " + peerIp);
+
+            // Fetch the requested blocks from the blockchain
+            List<Block> blocksToSend = blockchain.getBlocksInRange(startIndex, endIndex);
+
+            // Convert blocks to JSON and send them back
+            String blocksJson = new Gson().toJson(blocksToSend);
+            Message blockResponse = new Message(MessageType.BLOCK_RESPONSE, blocksJson);
+            sendMessage(blockResponse);
+
+            log("Sent " + blocksToSend.size() + " blocks to peer: " + peerIp);
+        } catch (Exception e) {
+            log("Failed to process block request from " + peerIp + ": " + e.getMessage());
+        }
+    }
+
+    private void handleBlockResponse(Message message) {
+        List<Block> receivedBlocks = new Gson().fromJson(message.getData(), new TypeToken<List<Block>>(){}.getType());
+        for (Block block : receivedBlocks) {
+            forkResolution.addBlock(block);  // Add each block to ForkResolution's queue for processing.
+        }
+    }
+
+    private void handleTipRequest() {
+        int currentTip = blockchain.getLastBlock().getIndex(); // Get the current tip (the latest block index) from the blockchain
+        Message tipResponse = new Message(MessageType.TIP_RESPONSE, String.valueOf(currentTip));
+        sendMessage(tipResponse);
+        log("Sent TIP_RESPONSE with current tip: " + currentTip);
+    }
+
+    // Handle receiving the blockchain tip response
+    private void handleBlockchainTipResponse(Message message) {
+        try {
+            int tipIndex = Integer.parseInt(message.getData());
+            log("Received blockchain tip from peer " + peerIp + ": " + tipIndex);
+            networkManager.syncWithPeers(tipIndex);
+        } catch (NumberFormatException e) {
+            log("Invalid blockchain tip received from peer " + peerIp + ": " + message.getData());
+        }
+    }
+
+    private void handlePeerDiscoveryRequest() {
+        try {
+            String peersJson = new Gson().toJson(networkManager.getPeers());
+            Message response = new Message(MessageType.SHARE_PEER_LIST, peersJson);
+            sendMessage(response);
+            log("Peer discovery request processed, peer list sent.");
+        } catch (Exception e) {
+            log("Failed to send peer discovery response: " + e.getMessage());
         }
     }
 
@@ -143,25 +207,10 @@ public class Node implements Runnable{
         networkManager.broadcastMessageExceptSender(receivedMsg, peerIp); // Broadcast to others except sender
     }
 
-    private void handlePeerDiscoveryRequest() {
-        String peersJson = gson.toJson(networkManager.getPeers());
-        sendMessage(new Message(MessageType.PEER_DISCOVERY_RESPONSE, peersJson));
-    }
-
-    private void handlePeerDiscoveryResponse(Message receivedMsg) {
-        ConcurrentHashMap<String, PeerInfo> receivedPeers = gson.fromJson(receivedMsg.getData(), ConcurrentHashMap.class);
-        receivedPeers.forEach((publicKey, peerInfo) -> {
-            if (!networkManager.getPeers().containsKey(publicKey)) {
-                networkManager.getPeers().put(publicKey, new PeerInfo(peerInfo.getIpAddress(), false));
-                log("Added new peer from discovery: " + peerInfo.getIpAddress());
-            }
-        });
-    }
-
     private void handleSharePeerList(Message receivedMsg) {
         log("Received gossip from peer: " + peerIp);
-        ConcurrentHashMap<String, PeerInfo> receivedPeers = gson.fromJson(receivedMsg.getData(), new TypeToken<ConcurrentHashMap<String, PeerInfo>>(){}.getType());
-
+        ConcurrentHashMap<String, PeerInfo> receivedPeers = gson.fromJson(receivedMsg.getData(), new TypeToken<ConcurrentHashMap<String, PeerInfo>>() {
+        }.getType());
         String localPublicKeyString = networkManager.getLocalPublicKey();
 
         receivedPeers.forEach((publicKey, peerInfo) -> {
@@ -180,7 +229,7 @@ public class Node implements Runnable{
                 });
             }
         });
-        log("Updated peer list after receiving gossip.");
+        log("Updated peer list after receiving gossip or peer discovery response.");
     }
 
     private void sendMessage(Message message) {
@@ -219,7 +268,9 @@ public class Node implements Runnable{
         }
     }
 
-    private void log(String message) {System.out.println("Node-" + nodeId + ": " + message);}
+    private void log(String message) {
+        System.out.println("Node-" + nodeId + ": " + message);
+    }
 
     private void processMessages() {
         while (running && connected) {
@@ -231,24 +282,4 @@ public class Node implements Runnable{
             }
         }
     }
-
-    /*
-    private void handleDisconnection() {
-        connected = false;
-        running = false;
-        log("Handling disconnection from " + peerIp);
-        networkManager.updatePeerConnectionStatus(peerIp, false);
-        try {
-            socket.close();
-        } catch (IOException e) {
-            log("Failed to close socket: " + e.getMessage());
-        }
-        try {
-            workerThread.join(); // Wait for the worker thread to finish
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt(); // Restore the interrupt status
-            //In case the thread is interrupted during shutdown, it's good to set the interrupt status again
-            log("Worker thread interrupted during shutdown: " + e.getMessage());
-        }
-    }*/
 }
