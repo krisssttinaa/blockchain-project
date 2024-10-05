@@ -105,6 +105,8 @@ public class Node implements Runnable {
             case SHARE_PEER_LIST -> handleSharePeerList(message);
             case BLOCK_REQUEST -> handleBlockRequest(message);  // NEW: Handle block request
             case BLOCK_RESPONSE -> handleBlockResponse(message);  // NEW: Handle block response
+            case PING -> sendPong();  // Send a PONG back to the peer
+            case PONG -> updatePeerAlive();  // Mark the peer as alive (successful response)
             default -> log("Unknown message type received from " + peerIp + ": " + message.getType());
         }
     }
@@ -260,12 +262,23 @@ public class Node implements Runnable {
     private void handleDisconnection() {
         connected = false;
         log("Handling disconnection from " + peerIp);
-        networkManager.updatePeerConnectionStatus(peerIp, false);
+
+        // Close the socket and mark the peer as disconnected
         try {
-            socket.close();
+            if (socket != null && !socket.isClosed()) {
+                socket.close();
+                log("Closed socket for peer: " + peerIp);
+            }
         } catch (IOException e) {
-            log("Failed to close socket: " + e.getMessage());
+            log("Failed to close socket for peer: " + peerIp + ". Error: " + e.getMessage());
         }
+
+        // Remove peer from the peer map
+        String peerPublicKey = StringUtil.getStringFromKey(networkManager.getPeerPublicKey(socket));
+        networkManager.removePeer(peerPublicKey);
+
+        // Update the peer connection status
+        networkManager.updatePeerConnectionStatus(peerIp, false);
     }
 
     private void log(String message) {
@@ -280,6 +293,20 @@ public class Node implements Runnable {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
+        }
+    }
+
+    // Method to send PONG message
+    private void sendPong() {
+        Message pongMessage = new Message(MessageType.PONG, "PONG");
+        sendMessage(pongMessage);  // Send PONG message back to the sender
+    }
+
+    // Update peer status as "alive" when PONG is received
+    private void updatePeerAlive() {
+        PeerInfo peerInfo = networkManager.getPeers().get(peerIp);
+        if (peerInfo != null) {
+            peerInfo.setLastPingResponseTime(System.currentTimeMillis());  // Record time of PONG response
         }
     }
 }

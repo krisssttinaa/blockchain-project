@@ -31,6 +31,8 @@ public class NetworkManager {
         startServer(); // Start the server to accept incoming connections on the same port (7777)
         startGossiping(); // Start gossiping for all nodes
         this.forkResolution = forkResolution; // Initialize the ForkResolution
+        monitorPeersForTimeouts(); // Monitor peers for timeouts
+        startPingPong(); // Start the ping-pong mechanism
     }
 
     // Starts the server to accept incoming connections
@@ -242,6 +244,9 @@ public class NetworkManager {
                     System.err.println("Max retry attempts reached for peer. Removing peer.");
                     String publicKey = StringUtil.getStringFromKey(getPeerPublicKey(socket));
                     peers.remove(publicKey); // Remove the peer from the map after 3 failed attempts
+                    if (!socket.isClosed()) {
+                        socket.close();
+                    }
                 }
                 try {
                     Thread.sleep(2000); // Delay before retry
@@ -259,6 +264,12 @@ public class NetworkManager {
                     .forEach(peerInfo -> {
                         System.out.println("Updating connection status for peer " + peerIp + " to " + status);
                         peerInfo.setConnected(status);
+
+                        // If the peer is disconnected, remove it
+                        if (!status) {
+                            String peerPublicKey = StringUtil.getStringFromKey(getPeerPublicKey(peerInfo.getSocket()));
+                            removePeer(peerPublicKey); // Remove from peers map
+                        }
                     });
         }
     }
@@ -367,6 +378,66 @@ public class NetworkManager {
                 .findFirst();
         return peerInfo.isPresent() && peerInfo.get().isConnected();
     }
+
+    public void removePeer(String peerPublicKey) {
+        PeerInfo removedPeer = peers.remove(peerPublicKey);
+        if (removedPeer != null) {
+            System.out.println("Removed peer: " + removedPeer.getIpAddress());
+        } else {
+            System.out.println("No peer found with public key: " + peerPublicKey);
+        }
+    }
+
+    public void startPingPong() {
+        networkPool.submit(() -> {
+            while (true) {
+                try {
+                    Thread.sleep(50000);  // Send ping every 50 seconds
+                    sendPingToPeers();
+                } catch (InterruptedException e) {
+                    System.err.println("Ping-pong thread interrupted: " + e.getMessage());
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        });
+    }
+
+    private void sendPingToPeers() {
+        Message pingMessage = new Message(MessageType.PING, "PING");
+        peers.forEach((publicKey, peerInfo) -> {
+            if (peerInfo.isConnected()) {
+                try {
+                    sendMessageToPeer(peerInfo.getSocket(), pingMessage);
+                    peerInfo.setLastPingTime(System.currentTimeMillis()); // Record the time of the last ping
+                } catch (IOException e) {
+                    System.err.println("Failed to send ping to peer " + peerInfo.getIpAddress() + ": " + e.getMessage());
+                    peerInfo.setConnected(false);  // Mark the peer as disconnected if the ping fails
+                }
+            }
+        });
+    }
+
+    public void monitorPeersForTimeouts() {
+        networkPool.submit(() -> {
+            while (true) {
+                try {
+                    Thread.sleep(30000);  // Check every 30 seconds
+                    long currentTime = System.currentTimeMillis();
+                    peers.forEach((publicKey, peerInfo) -> {
+                        if (peerInfo.isConnected() && (currentTime - peerInfo.getLastPingResponseTime()) > 90000) {  // 90-second timeout
+                            System.out.println("Peer " + peerInfo.getIpAddress() + " timed out. Marking as disconnected.");
+                            peerInfo.setConnected(false);  // Mark peer as disconnected due to timeout
+                        }
+                    });
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        });
+    }
+
     public void setBlockchain(Blockchain blockchain) {this.blockchain = blockchain;}
     public String getLocalPublicKey() {return StringUtil.getStringFromKey(localPublicKey);}
     public Map<String, PeerInfo> getPeers() {return peers;}
