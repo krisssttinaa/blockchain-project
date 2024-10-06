@@ -6,7 +6,6 @@ import blockchain.StringUtil;
 import com.google.gson.Gson;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.security.PublicKey;
@@ -35,8 +34,7 @@ public class NetworkManager {
         startPingPong(); // Start the ping-pong mechanism
     }
 
-    // Starts the server to accept incoming connections
-    public void startServer() {
+    public void startServer() { // Starts the server to accept incoming connections
         networkPool.submit(() -> {
             try (ServerSocket serverSocket = new ServerSocket(NODE_PORT)) {
                 // Retrieve the actual port the server is listening on
@@ -62,7 +60,6 @@ public class NetworkManager {
             Optional<PeerInfo> existingPeerInfo = peers.values().stream()
                     .filter(peerInfo -> peerInfo.getIpAddress().equals(peerIp) && peerInfo.isConnected())
                     .findFirst();
-
             if (existingPeerInfo.isPresent()) {
                 System.out.println("A connection already exists with " + peerIp + ". Closing the new socket.");
                 try {
@@ -72,7 +69,6 @@ public class NetworkManager {
                 }
                 return;  // Avoid creating another connection
             }
-
             // Proceed with handling the new connection
             Node node = new Node(socket, blockchain, this, forkResolution);
             networkPool.submit(node); // Start the node in a new thread
@@ -86,7 +82,6 @@ public class NetworkManager {
                 Optional<PeerInfo> existingPeerInfo = peers.values().stream()
                         .filter(peerInfo -> peerInfo.getIpAddress().equals(address) && peerInfo.isConnected())
                         .findFirst();
-
                 if (existingPeerInfo.isPresent()) {
                     System.out.println("Connection to peer " + address + " already exists. Skipping new connection.");
                     return;  // Exit if the peer is already connected
@@ -99,7 +94,6 @@ public class NetworkManager {
                     System.out.println("Attempting to connect to peer: " + address + " on port: " + port + " (Attempt " + (attempts + 1) + ")");
                     Socket socket = new Socket(address, port);
                     socket.setKeepAlive(true);  // Enable TCP keep-alive
-
                     synchronized (peers) {
                         // Double-check after creating the socket if the peer was connected in the meantime
                         Optional<PeerInfo> existingPeerInfo = peers.values().stream()
@@ -112,11 +106,9 @@ public class NetworkManager {
                             return;  // If already connected, close the newly created socket
                         }
 
-                        // Proceed with handling the new connection
-                        handleNewConnection(socket);
+                        handleNewConnection(socket); // Proceed with handling the new connection
                         String peerPublicKey = StringUtil.getStringFromKey(getPeerPublicKey(socket));
                         PeerInfo peerInfo = peers.get(peerPublicKey);
-
                         if (peerInfo != null) {
                             peerInfo.setSocket(socket);
                             peerInfo.setConnected(true);  // Mark the peer as connected
@@ -142,8 +134,7 @@ public class NetworkManager {
         });
     }
 
-    // Initiates the gossip protocol
-    void startGossiping() {
+    void startGossiping() { // Initiates the gossip protocol
         networkPool.submit(() -> {
             while (true) {
                 try {
@@ -160,8 +151,7 @@ public class NetworkManager {
         });
     }
 
-    // Gossip the peer list to all connected peers
-    private void gossip() {
+    private void gossip() { // Gossip the peer list to all connected peers
         if (peers.isEmpty()) {
             System.out.println("No peers to gossip with.");
             return;
@@ -177,17 +167,12 @@ public class NetworkManager {
                     peerInfo.setConnected(false);
                 }
             } else {
-                System.out.println("PeerInfo before skipping gossip:");
-                System.out.println("IP Address: " + peerInfo.getIpAddress());
-                System.out.println("Is Connected: " + peerInfo.isConnected());
-                System.out.println("Socket: " + peerInfo.getSocket());
                 System.out.println("Skipping gossip to " + peerInfo.getIpAddress() + " because it's marked as disconnected.");
             }
         });
     }
 
-    // Broadcasts a message to all connected peers
-    public synchronized void broadcastMessage(Message message) {
+    public synchronized void broadcastMessage(Message message) {  // Broadcasts a message to all connected peers
         try {
             System.out.println("Broadcasting message to all peers...");
             peers.forEach((publicKey, peerInfo) -> {
@@ -208,7 +193,6 @@ public class NetworkManager {
 
     public void broadcastMessageExceptSender(Message message, String senderIp) {
         peers.forEach((publicKey, peerInfo) -> {
-            // Avoid sending the message back to the original sender
             if (!peerInfo.getIpAddress().equals(senderIp) && peerInfo.isConnected()) {
                 try {
                     sendMessageToPeer(peerInfo.getSocket(), message); // Send the message to other peers
@@ -220,12 +204,10 @@ public class NetworkManager {
         });
     }
 
-    // Sends a message to a specific peer using an existing socket connection
-    private void sendMessageToPeer(Socket socket, Message message) throws IOException {
+    private void sendMessageToPeer(Socket socket, Message message) throws IOException { // Sends a message to a specific peer using an existing socket connection
         if (socket == null || socket.isClosed()) {
             throw new IOException("Socket is not available or closed.");
         }
-        // We add the retry mechanism here
         int retryCount = 0;
         boolean messageSent = false;
 
@@ -239,7 +221,6 @@ public class NetworkManager {
             } catch (IOException e) {
                 retryCount++;
                 System.err.println("Failed to send message to peer at " + socket.getInetAddress().getHostAddress() + " (Attempt " + retryCount + "): " + e.getMessage());
-
                 if (retryCount >= MAX_RETRIES) {
                     System.err.println("Max retry attempts reached for peer. Removing peer.");
                     String publicKey = StringUtil.getStringFromKey(getPeerPublicKey(socket));
@@ -274,8 +255,7 @@ public class NetworkManager {
         }
     }
 
-    // Request peer list from the seed node or any peer directly
-    public void requestPeerListFromSeedNode(String seedNodeIp) {
+    public void requestPeerListFromSeedNode(String seedNodeIp) { // Request peer list from the seed node or any peer directly
         System.out.println("Requesting peer list from seed node: " + seedNodeIp);
         PeerInfo seedNodePeer = peers.values().stream()
                 .filter(peerInfo -> peerInfo.getIpAddress().equals(seedNodeIp) && peerInfo.isConnected())
@@ -302,18 +282,15 @@ public class NetworkManager {
             System.err.println("No connected peers to request blockchain tip from.");
             return;
         }
-        // Pick a random peer from the connected peers
-        PeerInfo randomPeer = connectedPeers.get(new Random().nextInt(connectedPeers.size()));
-        // Send request for the blockchain tip to a specific peer
+        PeerInfo randomPeer = connectedPeers.get(new Random().nextInt(connectedPeers.size())); // Pick a random peer from the connected peers
         try {
-            requestTipFromPeer(randomPeer);  // Reusing the socket
+            requestTipFromPeer(randomPeer);
         } catch (IOException e) {
             System.err.println("Failed to request tip from peer " + randomPeer.getIpAddress() + ": " + e.getMessage());
         }
     }
 
-    // Request tip from the chosen peer (using its socket)
-    public void requestTipFromPeer(PeerInfo peerInfo) throws IOException {
+    public void requestTipFromPeer(PeerInfo peerInfo) throws IOException { // Request tip from the chosen peer (using its socket)
         Socket peerSocket = peerInfo.getSocket();
         if (peerSocket != null && !peerSocket.isClosed()) {
             // We just send the message using the existing connection (no need for a new Node instance)
@@ -331,11 +308,9 @@ public class NetworkManager {
         }
     }
 
-    // Syncing process
-    public void syncWithPeers(int latestIndex) {
+    public void syncWithPeers(int latestIndex) { // Syncing process
         int currentIndex = blockchain.getLastBlock().getIndex();
         int blocksToFetch = latestIndex - currentIndex;
-
         if (blocksToFetch <= 0) {
             System.out.println("No blocks to sync. Already up to date.");
             return;
@@ -346,7 +321,6 @@ public class NetworkManager {
 
         // Divide the blocks to fetch across peers
         int blocksPerPeer = Math.max(1, blocksToFetch / availablePeers.size());
-
         for (int i = 0; i < availablePeers.size(); i++) {
             PeerInfo peer = availablePeers.get(i);
             int startIndex = currentIndex + i * blocksPerPeer;
@@ -358,34 +332,22 @@ public class NetworkManager {
         }
     }
 
-    // Request specific block range from a peer
-    private void requestBlocksFromPeer(PeerInfo peer, int startIndex, int endIndex) {
+    private void requestBlocksFromPeer(PeerInfo peer, int startIndex, int endIndex) { // Request specific block range from a peer
         System.out.println("Requesting blocks " + startIndex + " to " + endIndex + " from peer " + peer.getIpAddress());
-        // Prepare request data (startIndex and endIndex)
         String requestData = startIndex + "," + endIndex;
         Message blockRequest = new Message(MessageType.BLOCK_REQUEST, requestData);
-
         try {
-            // Send request message to peer
             sendMessageToPeer(peer.getSocket(), blockRequest);
         } catch (IOException e) {
             System.err.println("Failed to request blocks from peer " + peer.getIpAddress() + ": " + e.getMessage());
         }
     }
+
     public boolean isPeerConnected(String ipAddress) {
         Optional<PeerInfo> peerInfo = peers.values().stream()
                 .filter(p -> p.getIpAddress().equals(ipAddress))
                 .findFirst();
         return peerInfo.isPresent() && peerInfo.get().isConnected();
-    }
-
-    public void removePeer(String peerPublicKey) {
-        PeerInfo removedPeer = peers.remove(peerPublicKey);
-        if (removedPeer != null) {
-            System.out.println("Removed peer: " + removedPeer.getIpAddress());
-        } else {
-            System.out.println("No peer found with public key: " + peerPublicKey);
-        }
     }
 
     public void startPingPong() {
@@ -403,7 +365,7 @@ public class NetworkManager {
         });
     }
 
-    private void sendPingToPeers() {
+    public void sendPingToPeers() {
         Message pingMessage = new Message(MessageType.PING, "PING");
         peers.forEach((publicKey, peerInfo) -> {
             if (peerInfo.isConnected()) {
@@ -422,12 +384,14 @@ public class NetworkManager {
         networkPool.submit(() -> {
             while (true) {
                 try {
-                    Thread.sleep(30000);  // Check every 30 seconds
+                    Thread.sleep(30000);  // Check every 30 seconds (adjustable)
                     long currentTime = System.currentTimeMillis();
                     peers.forEach((publicKey, peerInfo) -> {
-                        if (peerInfo.isConnected() && (currentTime - peerInfo.getLastPingResponseTime()) > 90000) {  // 90-second timeout
-                            System.out.println("Peer " + peerInfo.getIpAddress() + " timed out. Marking as disconnected.");
+                        long timeoutThreshold = 160000;  // 120 seconds
+                        if (peerInfo.isConnected() && (currentTime - peerInfo.getLastPingResponseTime()) > timeoutThreshold) {
                             peerInfo.setConnected(false);  // Mark peer as disconnected due to timeout
+                            removePeer(publicKey);
+                            System.out.println("Removed PeerInfo for peer: " + peerInfo.getIpAddress() + " due to timeout.");
                         }
                     });
                 } catch (InterruptedException e) {
@@ -438,6 +402,7 @@ public class NetworkManager {
         });
     }
 
+    public void removePeer(String peerPublicKey) {peers.remove(peerPublicKey);}
     public void setBlockchain(Blockchain blockchain) {this.blockchain = blockchain;}
     public String getLocalPublicKey() {return StringUtil.getStringFromKey(localPublicKey);}
     public Map<String, PeerInfo> getPeers() {return peers;}

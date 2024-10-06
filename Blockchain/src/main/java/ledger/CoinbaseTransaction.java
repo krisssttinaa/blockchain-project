@@ -1,7 +1,6 @@
 package ledger;
 
 import blockchain.Blockchain;
-
 import java.security.PrivateKey;
 import java.util.ArrayList;
 

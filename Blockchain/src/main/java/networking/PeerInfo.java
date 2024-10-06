@@ -48,34 +48,28 @@ public class PeerInfo {
         printStateChange("setSocket", previousSocket, socket);
     }
 
-    public String getIpAddress() {
-        return ipAddress;
-    }
+    public String getIpAddress() {return ipAddress;}
 
     public void setIpAddress(String ipAddress) {
         this.ipAddress = ipAddress;
         printStateChange("setIpAddress");
     }
 
-    public long getLastPingTime() {
-        return lastPingTime;
-    }
+    public long getLastPingTime() {return lastPingTime;}
 
     public void setLastPingTime(long lastPingTime) {
         long previousPingTime = this.lastPingTime;
         this.lastPingTime = lastPingTime;
         printStateChange("setLastPingTime", previousPingTime, lastPingTime);
     }
-
-    public long getLastPingResponseTime() {
-        return lastPingResponseTime;
-    }
+    public long getLastPingResponseTime() { return lastPingResponseTime; }
 
     public void setLastPingResponseTime(long lastPingResponseTime) {
         long previousPingResponseTime = this.lastPingResponseTime;
         this.lastPingResponseTime = lastPingResponseTime;
         printStateChange("setLastPingResponseTime", previousPingResponseTime, lastPingResponseTime);
     }
+
 
     // Helper to print state changes
     private void printStateChange(String method) {

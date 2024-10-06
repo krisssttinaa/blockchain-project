@@ -32,6 +32,7 @@ public class Node implements Runnable {
     private final BlockingQueue<Message> messageQueue = new LinkedBlockingQueue<>(); // Queue for incoming messages
     private volatile boolean running = true;
     private final Thread workerThread;
+    String peerPublicKey;
 
     public Node(Socket socket, Blockchain blockchain, NetworkManager networkManager, ForkResolution forkResolution) {
         this.nodeId = idCounter.incrementAndGet();
@@ -75,7 +76,6 @@ public class Node implements Runnable {
                         Thread.currentThread().interrupt();  // Restore the interrupt status
                         log("Thread interrupted while adding message to queue.");
                     }
-                    //handleNetworkMessage(receivedMsg);
                 }
             }
         } catch (IOException e) {
@@ -85,8 +85,7 @@ public class Node implements Runnable {
     }
 
     private void handlePublicKeyExchange(Message message) {
-        // Store peer's public key as a string
-        String peerPublicKey = message.getData(); // Store peer's public key as a string
+        peerPublicKey = message.getData(); // Store peer's public key as a string
         publicKeyExchanged = true;
         storePeerInfo(peerPublicKey); // Store peer info in the network manager
         log("Public key exchanged with peer: " + peerIp);
@@ -117,17 +116,12 @@ public class Node implements Runnable {
             String[] parts = requestData.split(",");
             int startIndex = Integer.parseInt(parts[0]);
             int endIndex = Integer.parseInt(parts[1]);
-
             log("Received block request for range: " + startIndex + " to " + endIndex + " from " + peerIp);
 
-            // Fetch the requested blocks from the blockchain
             List<Block> blocksToSend = blockchain.getBlocksInRange(startIndex, endIndex);
-
-            // Convert blocks to JSON and send them back
             String blocksJson = new Gson().toJson(blocksToSend);
             Message blockResponse = new Message(MessageType.BLOCK_RESPONSE, blocksJson);
             sendMessage(blockResponse);
-
             log("Sent " + blocksToSend.size() + " blocks to peer: " + peerIp);
         } catch (Exception e) {
             log("Failed to process block request from " + peerIp + ": " + e.getMessage());
@@ -203,7 +197,6 @@ public class Node implements Runnable {
             System.out.println("Block already received: " + receivedBlock.getHash());
             return;
         }
-        // Add the block to ForkResolution for processing, rather than adding it directly to the blockchain
         forkResolution.addBlock(receivedBlock);
         log("Block forwarded to ForkResolution for further processing.");
         networkManager.broadcastMessageExceptSender(receivedMsg, peerIp); // Broadcast to others except sender
@@ -246,7 +239,6 @@ public class Node implements Runnable {
     private void storePeerInfo(String incomingPublicKeyString) {
         synchronized (networkManager.getPeers()) {
             PeerInfo peerInfo = networkManager.getPeers().get(incomingPublicKeyString);
-
             if (peerInfo == null) {
                 peerInfo = new PeerInfo(peerIp, socket, true);
                 networkManager.getPeers().put(incomingPublicKeyString, peerInfo);
@@ -262,8 +254,6 @@ public class Node implements Runnable {
     private void handleDisconnection() {
         connected = false;
         log("Handling disconnection from " + peerIp);
-
-        // Close the socket and mark the peer as disconnected
         try {
             if (socket != null && !socket.isClosed()) {
                 socket.close();
@@ -272,12 +262,8 @@ public class Node implements Runnable {
         } catch (IOException e) {
             log("Failed to close socket for peer: " + peerIp + ". Error: " + e.getMessage());
         }
-
-        // Remove peer from the peer map
         String peerPublicKey = StringUtil.getStringFromKey(networkManager.getPeerPublicKey(socket));
         networkManager.removePeer(peerPublicKey);
-
-        // Update the peer connection status
         networkManager.updatePeerConnectionStatus(peerIp, false);
     }
 
@@ -296,17 +282,20 @@ public class Node implements Runnable {
         }
     }
 
-    // Method to send PONG message
-    private void sendPong() {
+    private void sendPong() { // Method to send PONG message
         Message pongMessage = new Message(MessageType.PONG, "PONG");
         sendMessage(pongMessage);  // Send PONG message back to the sender
     }
 
-    // Update peer status as "alive" when PONG is received
-    private void updatePeerAlive() {
-        PeerInfo peerInfo = networkManager.getPeers().get(peerIp);
+    private void updatePeerAlive() { // Update peer status as "alive" when PONG is received
+        String peerPublicKey = this.peerPublicKey;
+        PeerInfo peerInfo = networkManager.getPeers().get(peerPublicKey);  // Get the PeerInfo object
         if (peerInfo != null) {
-            peerInfo.setLastPingResponseTime(System.currentTimeMillis());  // Record time of PONG response
+            long currentTime = System.currentTimeMillis();
+            peerInfo.setLastPingResponseTime(currentTime);  // Update lastPingResponseTime
+            log("PONG received from peer: " + peerPublicKey + ". Updated lastPingResponseTime to: " + currentTime);
+        } else {
+            log("No PeerInfo found for peer: " + peerPublicKey + " while updating alive status.");
         }
     }
 }
