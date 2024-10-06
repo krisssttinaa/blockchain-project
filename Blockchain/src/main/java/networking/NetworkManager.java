@@ -23,15 +23,15 @@ public class NetworkManager {
     private final Gson gson = new Gson(); // Gson instance for JSON handling
     private static final int MAX_RETRIES = 3; // Maximum number of retry attempts
     private final ForkResolution forkResolution; // Added ForkResolution reference
-    private final int gossipInterval = 60000; // Gossip interval in milliseconds
+    private GossipManager gossipManager; // NEW: Reference to the GossipManager
+    private PingManager pingManager; // NEW: Reference to the PingManager
 
     public NetworkManager(PublicKey localPublicKey, ForkResolution forkResolution) {
         this.localPublicKey = localPublicKey;
-        startServer(); // Start the server to accept incoming connections on the same port (7777)
-        startGossiping(); // Start gossiping for all nodes
         this.forkResolution = forkResolution; // Initialize the ForkResolution
-        monitorPeersForTimeouts(); // Monitor peers for timeouts
-        startPingPong(); // Start the ping-pong mechanism
+        startServer(); // Start the server to accept incoming connections on the same port (7777)
+        gossipManager = new GossipManager(peers, networkPool, gson, this);
+        pingManager = new PingManager(peers, networkPool, gson, this);
     }
 
     public void startServer() { // Starts the server to accept incoming connections
@@ -134,44 +134,6 @@ public class NetworkManager {
         });
     }
 
-    void startGossiping() { // Initiates the gossip protocol
-        networkPool.submit(() -> {
-            while (true) {
-                try {
-                    Thread.sleep(gossipInterval);
-                    gossip();
-                } catch (InterruptedException e) {
-                    System.err.println("Gossiping thread interrupted: " + e.getMessage());
-                    break;
-                } catch (Exception e) {
-                    System.err.println("Unexpected error during gossiping: " + e.getMessage());
-                    e.printStackTrace();
-                }
-            }
-        });
-    }
-
-    private void gossip() { // Gossip the peer list to all connected peers
-        if (peers.isEmpty()) {
-            System.out.println("No peers to gossip with.");
-            return;
-        }
-        System.out.println("Gossiping peer list to connected peers.");
-        peers.forEach((publicKey, peerInfo) -> {
-            if (peerInfo.isConnected()) {
-                try {
-                    System.out.println("Gossiping peer list to " + peerInfo.getIpAddress());
-                    sendMessageToPeer(peerInfo.getSocket(), new Message(MessageType.SHARE_PEER_LIST, gson.toJson(peers)));
-                } catch (IOException e) {
-                    System.err.println("Failed to send gossip message to peer " + peerInfo.getIpAddress() + ": " + e.getMessage());
-                    peerInfo.setConnected(false);
-                }
-            } else {
-                System.out.println("Skipping gossip to " + peerInfo.getIpAddress() + " because it's marked as disconnected.");
-            }
-        });
-    }
-
     public synchronized void broadcastMessage(Message message) {  // Broadcasts a message to all connected peers
         try {
             System.out.println("Broadcasting message to all peers...");
@@ -204,7 +166,7 @@ public class NetworkManager {
         });
     }
 
-    private void sendMessageToPeer(Socket socket, Message message) throws IOException { // Sends a message to a specific peer using an existing socket connection
+    public synchronized void sendMessageToPeer(Socket socket, Message message) throws IOException { // Sends a message to a specific peer using an existing socket connection
         if (socket == null || socket.isClosed()) {
             throw new IOException("Socket is not available or closed.");
         }
@@ -224,7 +186,7 @@ public class NetworkManager {
                 if (retryCount >= MAX_RETRIES) {
                     System.err.println("Max retry attempts reached for peer. Removing peer.");
                     String publicKey = StringUtil.getStringFromKey(getPeerPublicKey(socket));
-                    peers.remove(publicKey); // Remove the peer from the map after 3 failed attempts
+                    removePeer(publicKey);
                     if (!socket.isClosed()) {
                         socket.close();
                     }
@@ -350,59 +312,7 @@ public class NetworkManager {
         return peerInfo.isPresent() && peerInfo.get().isConnected();
     }
 
-    public void startPingPong() {
-        networkPool.submit(() -> {
-            while (true) {
-                try {
-                    Thread.sleep(50000);  // Send ping every 50 seconds
-                    sendPingToPeers();
-                } catch (InterruptedException e) {
-                    System.err.println("Ping-pong thread interrupted: " + e.getMessage());
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
-        });
-    }
-
-    public void sendPingToPeers() {
-        Message pingMessage = new Message(MessageType.PING, "PING");
-        peers.forEach((publicKey, peerInfo) -> {
-            if (peerInfo.isConnected()) {
-                try {
-                    sendMessageToPeer(peerInfo.getSocket(), pingMessage);
-                    peerInfo.setLastPingTime(System.currentTimeMillis()); // Record the time of the last ping
-                } catch (IOException e) {
-                    System.err.println("Failed to send ping to peer " + peerInfo.getIpAddress() + ": " + e.getMessage());
-                    peerInfo.setConnected(false);  // Mark the peer as disconnected if the ping fails
-                }
-            }
-        });
-    }
-
-    public void monitorPeersForTimeouts() {
-        networkPool.submit(() -> {
-            while (true) {
-                try {
-                    Thread.sleep(30000);  // Check every 30 seconds (adjustable)
-                    long currentTime = System.currentTimeMillis();
-                    peers.forEach((publicKey, peerInfo) -> {
-                        long timeoutThreshold = 160000;  // 120 seconds
-                        if (peerInfo.isConnected() && (currentTime - peerInfo.getLastPingResponseTime()) > timeoutThreshold) {
-                            peerInfo.setConnected(false);  // Mark peer as disconnected due to timeout
-                            removePeer(publicKey);
-                            System.out.println("Removed PeerInfo for peer: " + peerInfo.getIpAddress() + " due to timeout.");
-                        }
-                    });
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
-        });
-    }
-
-    public void removePeer(String peerPublicKey) {peers.remove(peerPublicKey);}
+    public synchronized void removePeer(String peerPublicKey) {peers.remove(peerPublicKey);}
     public void setBlockchain(Blockchain blockchain) {this.blockchain = blockchain;}
     public String getLocalPublicKey() {return StringUtil.getStringFromKey(localPublicKey);}
     public Map<String, PeerInfo> getPeers() {return peers;}

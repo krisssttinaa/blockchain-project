@@ -28,9 +28,7 @@ public class PeerInfo {
         printStateChange("Constructor (IP + Socket + isConnected)");
     }
 
-    public boolean isConnected() {
-        return isConnected;
-    }
+    public boolean isConnected() {return isConnected;}
 
     public synchronized void setConnected(boolean connected) {
         boolean previousState = this.isConnected;
@@ -38,9 +36,7 @@ public class PeerInfo {
         printStateChange("setConnected", previousState, connected);
     }
 
-    public Socket getSocket() {
-        return socket;
-    }
+    public Socket getSocket() {return socket;}
 
     public synchronized void setSocket(Socket socket) {
         Socket previousSocket = this.socket;
@@ -60,16 +56,15 @@ public class PeerInfo {
     public void setLastPingTime(long lastPingTime) {
         long previousPingTime = this.lastPingTime;
         this.lastPingTime = lastPingTime;
-        printStateChange("setLastPingTime", previousPingTime, lastPingTime);
+        //printStateChange("setLastPingTime", previousPingTime, lastPingTime);
     }
     public long getLastPingResponseTime() { return lastPingResponseTime; }
 
     public void setLastPingResponseTime(long lastPingResponseTime) {
         long previousPingResponseTime = this.lastPingResponseTime;
         this.lastPingResponseTime = lastPingResponseTime;
-        printStateChange("setLastPingResponseTime", previousPingResponseTime, lastPingResponseTime);
+        //printStateChange("setLastPingResponseTime", previousPingResponseTime, lastPingResponseTime);
     }
-
 
     // Helper to print state changes
     private void printStateChange(String method) {
