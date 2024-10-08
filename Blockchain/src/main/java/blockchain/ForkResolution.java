@@ -1,5 +1,8 @@
 package blockchain;
 
+import ledger.Transaction;
+import ledger.TransactionOutput;
+
 import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -79,6 +82,17 @@ public class ForkResolution implements Runnable {
             }
         }
     }
+    public synchronized void revertCoinbaseTransaction(Block block) {
+        Transaction coinbaseTransaction = block.getTransactions().get(0);  // Assuming coinbase is the first transaction
+        if (!"COINBASE".equals(coinbaseTransaction.sender)) {
+            return;
+        }
+
+        for (TransactionOutput output : coinbaseTransaction.outputs) {
+            Blockchain.UTXOs.remove(output.id);  // Remove the UTXOs created by the coinbase transaction
+            System.out.println("Reverted coinbase transaction for block: " + block.getHash());
+        }
+    }
 
     // Method to handle chain reorganization if a longer fork is detected
     private void checkForLongerFork(int forkIndex) {
@@ -115,6 +129,7 @@ public class ForkResolution implements Runnable {
         while (blockchain.getLastBlock().getIndex() > forkIndex) {
             Block discardedBlock = blockchain.getLastBlock();
             discardedBlocks.add(discardedBlock);  // Track the discarded block
+            //revertCoinbaseTransaction(discardedBlock);  // NEEDED OR NO THINK?
             blockchain.removeLastBlock();  // Remove the last block from the chain
             System.out.println("Discarded block: " + discardedBlock.getHash());
         }
@@ -122,6 +137,9 @@ public class ForkResolution implements Runnable {
     }
 
     public void addBlock(Block block) {blockQueue.add(block);}
-    private void addBlockToForks(Block block) {forks.computeIfAbsent(block.getIndex(), k -> new ArrayList<>()).add(block);}
+    private void addBlockToForks(Block block) {
+        forks.computeIfAbsent(block.getIndex(), k -> new ArrayList<>()).add(block);
+        revertCoinbaseTransaction(block);
+    }
     public List<Block> getForkedBlocks(int index) {return forks.getOrDefault(index, Collections.emptyList());}
 }

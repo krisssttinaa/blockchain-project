@@ -25,6 +25,7 @@ public class Blockchain {
     private final float miningReward = 6.00f;
     private final int MAX_HASH_COUNT = 300;  // Keep only the last 300 block hashes, track only the most recent block hashes
     private final int difficulty = 6; // Mining difficulty
+    private static final int MINIMUM_CONFIRMATIONS = 5;
 
     public Blockchain() {
         this.chain = new ArrayList<>();
@@ -74,7 +75,7 @@ public class Blockchain {
             newBlock.mineBlock(difficulty);
             forkResolution.addBlock(newBlock);  // Add block to ForkResolution for consensus
             updateUTXOs(newBlock, true);  // Update UTXO pool
-            ageUTXOs();  // Increase confirmations of UTXOs
+            //ageUTXOs();  // Increase confirmations of UTXOs
             networkManager.broadcastMessage(new Message(MessageType.NEW_BLOCK, new Gson().toJson(newBlock)));
             System.out.println("BROADCASTED");
         } else {
@@ -93,7 +94,7 @@ public class Blockchain {
             return false;
         }
         if (block.getPreviousHash().equals(lastBlock.getHash()) && block.getIndex() == lastBlock.getIndex() + 1) {
-            return validateAndAddBlock(block);  // Valid sequential block, so add it
+            return validateAndAddBlock(block);
         }
         else if (block.getIndex() <= lastBlock.getIndex()) {
             System.out.println("Received block for existing index, potential fork at index: " + block.getIndex());
@@ -181,10 +182,12 @@ public class Blockchain {
         for (TransactionOutput utxo : Blockchain.UTXOs.values()) {
             Block containingBlock = getBlockByTransactionId(utxo.parentTransactionId);
             if (isBlockInMainChain(containingBlock)) {
-                utxo.confirmations++;
-            } else {
-                // Do not increment confirmations for UTXOs in forked blocks
-                System.out.println("Skipping confirmation for UTXO in forked block.");
+                if (utxo.confirmations < MINIMUM_CONFIRMATIONS) {
+                    utxo.confirmations++;
+                    System.out.println("UTXO with ID: " + utxo.id + " now has " + utxo.confirmations + " confirmations.");
+                } else {
+                    System.out.println("UTXO with ID: " + utxo.id + " has reached 5 confirmations.");
+                }
             }
         }
     }

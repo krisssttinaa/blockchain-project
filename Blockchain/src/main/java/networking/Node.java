@@ -293,7 +293,7 @@ public class Node implements Runnable {
         if (peerInfo != null) {
             long currentTime = System.currentTimeMillis();
             peerInfo.setLastPingResponseTime(currentTime);  // Update lastPingResponseTime
-            log("PONG received from peer: " + peerPublicKey + ". Updated lastPingResponseTime to: " + currentTime);
+            //log("PONG received from peer: " + peerPublicKey + ". Updated lastPingResponseTime to: " + currentTime);
         } else {
             log("No PeerInfo found for peer: " + peerPublicKey + " while updating alive status.");
         }
