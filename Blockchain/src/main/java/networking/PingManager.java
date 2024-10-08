@@ -12,7 +12,7 @@ public class PingManager {
     private final Gson gson;
     private final NetworkManager networkManager;  // Reference to NetworkManager to reuse sendMessageToPeer
     private final int pingInterval = 50000; // Ping interval in milliseconds
-    private final int timeoutThreshold = 160000; // Timeout threshold in milliseconds (120 seconds)
+    private final int timeoutThreshold = 150000; // Timeout threshold in milliseconds (150 seconds)
 
     public PingManager(Map<String, PeerInfo> peers, ExecutorService networkPool, Gson gson, NetworkManager networkManager) {
         this.peers = peers;

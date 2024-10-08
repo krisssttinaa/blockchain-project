@@ -11,6 +11,7 @@ public class Wallet {
     private PrivateKey privateKey;
     public PublicKey publicKey;
     private static final String WALLET_FILE = "wallet.dat";  // File to store wallet keys
+    private static final int MINIMUM_CONFIRMATIONS = 5;
 
     public Wallet() {
         // If wallet file exists, load it, otherwise create a new wallet
@@ -40,7 +41,20 @@ public class Wallet {
     public float getBalance() {
         float total = 0;
         for (TransactionOutput utxo : Blockchain.UTXOs.values()) {
-            if (utxo.isMine(StringUtil.getStringFromKey(publicKey))) {
+            // Only include UTXOs that belong to the wallet and have at least 5 confirmations
+            if (utxo.isMine(StringUtil.getStringFromKey(publicKey)) && utxo.confirmations >= MINIMUM_CONFIRMATIONS) {
+                total += utxo.value;
+            }
+        }
+        return total;
+    }
+
+    // Get the maturing balance (UTXOs that belong to this wallet but are not yet mature)
+    public float getMaturingBalance() {
+        float total = 0;
+        for (TransactionOutput utxo : Blockchain.UTXOs.values()) {
+            // Only include UTXOs that belong to this wallet and have NOT yet reached the minimum confirmations
+            if (utxo.isMine(StringUtil.getStringFromKey(publicKey)) && utxo.confirmations < MINIMUM_CONFIRMATIONS) {
                 total += utxo.value;
             }
         }

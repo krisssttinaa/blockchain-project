@@ -13,10 +13,11 @@ public class Transaction {
     public String recipient; // recipient address as a string (previously PublicKey)
     public float value; // amount of coins to send
     public byte[] signature; // prevents others from spending funds in the sender's wallet
-    public List<TransactionInput> inputs; // previous transaction outputs being used as inputs
+    public List<TransactionInput> inputs = new ArrayList<>(); // previous transaction outputs being used as inputs
     public List<TransactionOutput> outputs = new ArrayList<>(); // outputs created by this transaction
     private static int sequence = 0; // to ensure transaction uniqueness
     public static float minimumTransaction = 0; // Minimum transaction value
+    private int numberOfConfirmations = 5; // Number of confirmations for the transaction
 
     public Transaction(String from, String to, float value, List<TransactionInput> inputs) {
         this.sender = from;
@@ -29,9 +30,7 @@ public class Transaction {
     // Calculates the transaction hash (used as transactionId)
     public String calculateHash() {
         sequence++; // ensure uniqueness
-        return StringUtil.applySha256(
-                sender + recipient + value + sequence+ System.currentTimeMillis()
-        );
+        return StringUtil.applySha256(sender + recipient + value + sequence+ System.currentTimeMillis());
     }
 
     // Generates a signature using the sender's private key
@@ -52,8 +51,8 @@ public class Transaction {
         if (value == 0) {
             System.out.println("Processing zero-value transaction.");
             transactionId = calculateHash();
-            outputs.add(new TransactionOutput(recipient, value, transactionId));
-            Blockchain.UTXOs.put(outputs.get(0).id, outputs.get(0)); // Add to UTXOs in the Blockchain
+            //outputs.add(new TransactionOutput(recipient, value, transactionId));
+            //Blockchain.UTXOs.put(outputs.get(0).id, outputs.get(0)); // Add to UTXOs in the Blockchain
             return true;
         }
         // Step 1: Verify the signature
@@ -70,7 +69,7 @@ public class Transaction {
                 return false;
             }
             // Ensure UTXO is mature enough to be spent (e.g., at least 5 confirmations)
-            if (input.UTXO.confirmations < 5) {
+            if (input.UTXO.confirmations < numberOfConfirmations) {
                 System.out.println("#UTXO is not mature enough to be spent. Required confirmations: 5");
                 return false;
             }

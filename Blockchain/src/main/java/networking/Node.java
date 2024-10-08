@@ -61,7 +61,7 @@ public class Node implements Runnable {
         try {
             String receivedMessage;
             while (connected && (receivedMessage = input.readLine()) != null) {
-                log("Received message: " + receivedMessage);
+                //log("Received message: " + receivedMessage);
                 Message receivedMsg = gson.fromJson(receivedMessage, Message.class);
                 if (!publicKeyExchanged) {
                     if (receivedMsg.getType() == MessageType.PUBLIC_KEY_EXCHANGE) {

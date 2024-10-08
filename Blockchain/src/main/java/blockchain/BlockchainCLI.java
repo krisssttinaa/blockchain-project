@@ -40,7 +40,8 @@ public class BlockchainCLI {
                     case 1 -> blockchain.printChain();
                     case 2 -> sendTransaction();
                     case 3 -> checkBalance();
-                    case 4 -> System.exit(0);
+                    case 4 -> checkMaturingBalance();  // New method to check maturing balance
+                    case 5 -> System.exit(0);
                     default -> System.out.println("Invalid choice, please try again.");
                 }
             }
@@ -88,4 +89,10 @@ public class BlockchainCLI {
         float balance = senderWallet.getBalance();
         System.out.println("Balance: " + balance);
     }
+
+    private void checkMaturingBalance() {
+        float maturingBalance = senderWallet.getMaturingBalance();
+        System.out.println("Maturing Balance: " + maturingBalance);
+    }
+
 }
