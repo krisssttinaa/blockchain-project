@@ -116,7 +116,7 @@ public class Node implements Runnable {
             String[] parts = requestData.split(",");
             int startIndex = Integer.parseInt(parts[0]);
             int endIndex = Integer.parseInt(parts[1]);
-            log("Received block request for range: " + startIndex + " to " + endIndex + " from " + peerIp);
+            //log("Received block request for range: " + startIndex + " to " + endIndex + " from " + peerIp);
 
             List<Block> blocksToSend = blockchain.getBlocksInRange(startIndex, endIndex);
             String blocksJson = new Gson().toJson(blocksToSend);
@@ -139,14 +139,14 @@ public class Node implements Runnable {
         int currentTip = blockchain.getLastBlock().getIndex(); // Get the current tip (the latest block index) from the blockchain
         Message tipResponse = new Message(MessageType.TIP_RESPONSE, String.valueOf(currentTip));
         sendMessage(tipResponse);
-        log("Sent TIP_RESPONSE with current tip: " + currentTip);
+        //log("Sent TIP_RESPONSE with current tip: " + currentTip);
     }
 
     // Handle receiving the blockchain tip response
     private void handleBlockchainTipResponse(Message message) {
         try {
             int tipIndex = Integer.parseInt(message.getData());
-            log("Received blockchain tip from peer " + peerIp + ": " + tipIndex);
+           // log("Received blockchain tip from peer " + peerIp + ": " + tipIndex);
             networkManager.syncWithPeers(tipIndex);
         } catch (NumberFormatException e) {
             log("Invalid blockchain tip received from peer " + peerIp + ": " + message.getData());

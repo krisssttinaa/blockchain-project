@@ -62,6 +62,7 @@ public class Wallet {
     }
 
     public Transaction sendFunds(String recipient, float value) {
+        // Step 1: Ensure the wallet has enough matured funds to send the transaction
         if (getBalance() < value) {
             System.out.println("#Not Enough funds to send transaction. Transaction Discarded.");
             return null;
@@ -69,17 +70,28 @@ public class Wallet {
 
         ArrayList<TransactionInput> inputs = new ArrayList<>();
         float total = 0;
+
+        // Step 2: Gather UTXOs that belong to the wallet and are fully matured (have enough confirmations)
         for (TransactionOutput utxo : Blockchain.UTXOs.values()) {
-            if (utxo.isMine(StringUtil.getStringFromKey(publicKey))) {
+            // Check if the UTXO belongs to the wallet and has enough confirmations
+            if (utxo.isMine(StringUtil.getStringFromKey(publicKey)) && utxo.confirmations >= MINIMUM_CONFIRMATIONS) {
                 total += utxo.value;
                 inputs.add(new TransactionInput(utxo.id));
-                if (total > value) break;
+                if (total > value) break;  // Stop if we have enough inputs to cover the value
             }
         }
 
+        // Step 3: Create the transaction if we have enough inputs to cover the value
+        if (total < value) {
+            System.out.println("#Not enough confirmed UTXOs to cover the transaction. Transaction Discarded.");
+            return null;
+        }
+
+        // Create a new transaction with the gathered inputs
         Transaction newTransaction = new Transaction(StringUtil.getStringFromKey(publicKey), recipient, value, inputs);
         newTransaction.generateSignature(privateKey);
 
+        // Step 4: Remove the spent UTXOs from the UTXO pool
         for (TransactionInput input : inputs) {
             Blockchain.UTXOs.remove(input.transactionOutputId);
         }

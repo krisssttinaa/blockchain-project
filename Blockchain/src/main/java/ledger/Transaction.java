@@ -51,8 +51,6 @@ public class Transaction {
         if (value == 0) {
             System.out.println("Processing zero-value transaction.");
             transactionId = calculateHash();
-            //outputs.add(new TransactionOutput(recipient, value, transactionId));
-            //Blockchain.UTXOs.put(outputs.get(0).id, outputs.get(0)); // Add to UTXOs in the Blockchain
             return true;
         }
         // Step 1: Verify the signature

@@ -74,7 +74,7 @@ public class Blockchain {
             Block newBlock = new Block(chain.size(), chain.get(chain.size() - 1).getHash(), transactionsToMine);
             newBlock.mineBlock(difficulty);
             forkResolution.addBlock(newBlock);  // Add block to ForkResolution for consensus
-            updateUTXOs(newBlock, true);  // Update UTXO pool
+            //updateUTXOs(newBlock, true);  // Update UTXO pool
             //ageUTXOs();  // Increase confirmations of UTXOs
             networkManager.broadcastMessage(new Message(MessageType.NEW_BLOCK, new Gson().toJson(newBlock)));
             System.out.println("BROADCASTED");
@@ -128,10 +128,7 @@ public class Blockchain {
                         return false;
                     }
                     input.UTXO = utxo;  // Link the UTXO to the input
-                    if (input.UTXO.value != utxo.value) {
-                        System.out.println("UTXO value mismatch for input.");
-                        return false;
-                    }
+                    System.out.println("Transaction input references UTXO ID: " + input.transactionOutputId + " with value: " + utxo.value);
                 }
             }else {
                 // Zero-value transaction; no inputs, skip UTXO checks
@@ -180,47 +177,63 @@ public class Blockchain {
 
     public void ageUTXOs() {
         for (TransactionOutput utxo : Blockchain.UTXOs.values()) {
+            System.out.println("Aging UTXO with ID: " + utxo.id + " in block: " + utxo.parentTransactionId);
             Block containingBlock = getBlockByTransactionId(utxo.parentTransactionId);
             if (isBlockInMainChain(containingBlock)) {
                 if (utxo.confirmations < MINIMUM_CONFIRMATIONS) {
                     utxo.confirmations++;
                     System.out.println("UTXO with ID: " + utxo.id + " now has " + utxo.confirmations + " confirmations.");
                 } else {
-                    System.out.println("UTXO with ID: " + utxo.id + " has reached 5 confirmations.");
+                    System.out.println("UTXO with ID: " + utxo.id + " has reached "+MINIMUM_CONFIRMATIONS+" confirmations.");
                 }
             }
         }
     }
 
     private void updateUTXOs(Block block, boolean isMainChain) {
-        // Only add UTXOs if this block is part of the main chain
         if (!isMainChain) {
             System.out.println("Block is part of a fork, not adding UTXOs.");
             return;
         }
 
         for (Transaction transaction : block.getTransactions()) {
+            // Skip UTXO input handling for zero-value transactions
+            if (transaction.value == 0) {
+                System.out.println("Skipping UTXO input handling for zero-value transaction.");
+                continue;  // Skip directly to handling outputs
+            }
+
             // Remove spent UTXOs referenced in the transaction's inputs
             for (TransactionInput input : transaction.getInputs()) {
-                Blockchain.UTXOs.remove(input.transactionOutputId);
+                TransactionOutput utxo = Blockchain.UTXOs.get(input.transactionOutputId);
+                // Check if the UTXO is fully matured before spending it
+                if (utxo != null && utxo.confirmations >= MINIMUM_CONFIRMATIONS) {
+                    Blockchain.UTXOs.remove(input.transactionOutputId);
+                    System.out.println("UTXO removed: " + input.transactionOutputId);
+                } else {
+                    System.out.println("Attempted to spend immature UTXO: " + input.transactionOutputId + ". Ignored.");
+                }
             }
+
             // Add new UTXOs created by the transaction
             for (TransactionOutput output : transaction.getOutputs()) {
                 Blockchain.UTXOs.put(output.id, output);
+                System.out.println("UTXO added: " + output.id);
             }
         }
     }
 
+
     private synchronized void revertUTXOs(Block block) {
         for (Transaction transaction : block.getTransactions()) {
-            // Revert outputs created by this block's transactions
             for (TransactionOutput output : transaction.getOutputs()) {
-                Blockchain.UTXOs.remove(output.id);  // Remove the UTXO created by the block
+                Blockchain.UTXOs.remove(output.id);
+                System.out.println("Reverted UTXO removed: " + output.id);
             }
-            // Re-add UTXOs that were spent by this block's transactions
             for (TransactionInput input : transaction.getInputs()) {
                 if (input.UTXO != null) {
-                    Blockchain.UTXOs.put(input.transactionOutputId, input.UTXO);  // Restore spent UTXOs
+                    Blockchain.UTXOs.put(input.transactionOutputId, input.UTXO);
+                    System.out.println("Reverted UTXO re-added: " + input.transactionOutputId);
                 }
             }
         }
