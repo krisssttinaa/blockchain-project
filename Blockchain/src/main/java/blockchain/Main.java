@@ -15,7 +15,6 @@ public class Main {
     private static final String SEED_NODE_ADDRESS = "172.18.0.2"; // Seed node IP
     public static final int NODE_PORT = 7777;
     public static String minerAddress;
-    private static final String WALLET_FILE_PATH = "wallet.dat";
     public static boolean syncTriggered = false; // Prevent multiple syncs
 
     public static void main(String[] args) {

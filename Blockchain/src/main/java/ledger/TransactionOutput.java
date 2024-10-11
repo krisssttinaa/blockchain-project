@@ -18,7 +18,7 @@ public class TransactionOutput {
 
     // Check if the coin belongs to the provided public key
     public boolean isMine(String publicKey) {
-        return publicKey.equals(recipient);
+        return publicKey.equals(this.recipient);
     }
 
     @Override

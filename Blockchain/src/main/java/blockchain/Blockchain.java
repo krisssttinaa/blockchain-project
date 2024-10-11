@@ -15,6 +15,7 @@ import java.util.concurrent.*;
 
 public class Blockchain {
     public static final ConcurrentHashMap<String, TransactionOutput> UTXOs = new ConcurrentHashMap<>(); // Instance-level UTXO pool
+    public static final int MINIMUM_CONFIRMATIONS = 3;
     public static ConcurrentLinkedQueue<Transaction> unconfirmedTransactions = new ConcurrentLinkedQueue<>(); // Unconfirmed transaction pool using ConcurrentLinkedQueue
     private final List<Block> chain;
     private NetworkManager networkManager;
@@ -25,7 +26,6 @@ public class Blockchain {
     private final float miningReward = 6.00f;
     private final int MAX_HASH_COUNT = 300;  // Keep only the last 300 block hashes, track only the most recent block hashes
     private final int difficulty = 6; // Mining difficulty
-    private static final int MINIMUM_CONFIRMATIONS = 5;
 
     public Blockchain() {
         this.chain = new ArrayList<>();
@@ -177,7 +177,7 @@ public class Blockchain {
 
     public void ageUTXOs() {
         for (TransactionOutput utxo : Blockchain.UTXOs.values()) {
-            System.out.println("Aging UTXO with ID: " + utxo.id + " in block: " + utxo.parentTransactionId);
+            //System.out.println("Aging UTXO with ID: " + utxo.id + " in block: " + utxo.parentTransactionId);
             Block containingBlock = getBlockByTransactionId(utxo.parentTransactionId);
             if (isBlockInMainChain(containingBlock)) {
                 if (utxo.confirmations < MINIMUM_CONFIRMATIONS) {
@@ -190,7 +190,7 @@ public class Blockchain {
         }
     }
 
-    private void updateUTXOs(Block block, boolean isMainChain) {
+    void updateUTXOs(Block block, boolean isMainChain) {
         if (!isMainChain) {
             System.out.println("Block is part of a fork, not adding UTXOs.");
             return;
@@ -224,7 +224,7 @@ public class Blockchain {
     }
 
 
-    private synchronized void revertUTXOs(Block block) {
+    synchronized void revertUTXOs(Block block) {
         for (Transaction transaction : block.getTransactions()) {
             for (TransactionOutput output : transaction.getOutputs()) {
                 Blockchain.UTXOs.remove(output.id);

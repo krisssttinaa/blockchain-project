@@ -11,7 +11,7 @@ public class Wallet {
     private PrivateKey privateKey;
     public PublicKey publicKey;
     private static final String WALLET_FILE = "wallet.dat";  // File to store wallet keys
-    private static final int MINIMUM_CONFIRMATIONS = 5;
+    private static final int MINIMUM_CONFIRMATIONS = 3;
 
     public Wallet() {
         // If wallet file exists, load it, otherwise create a new wallet
@@ -38,30 +38,37 @@ public class Wallet {
         }
     }
 
-    public float getBalance() {
+    public float calculateBalance(boolean onlyConfirmed) {
         float total = 0;
         for (TransactionOutput utxo : Blockchain.UTXOs.values()) {
-            // Only include UTXOs that belong to the wallet and have at least 5 confirmations
-            if (utxo.isMine(StringUtil.getStringFromKey(publicKey)) && utxo.confirmations >= MINIMUM_CONFIRMATIONS) {
-                total += utxo.value;
+            if (utxo.isMine(StringUtil.getStringFromKey(publicKey))) {
+                if (onlyConfirmed && utxo.confirmations >= MINIMUM_CONFIRMATIONS) {
+                    total += utxo.value;
+                } else if (!onlyConfirmed && utxo.confirmations < MINIMUM_CONFIRMATIONS) {
+                    total += utxo.value;
+                }
             }
         }
         return total;
     }
 
-    // Get the maturing balance (UTXOs that belong to this wallet but are not yet mature)
+    public float getBalance() {
+        return calculateBalance(true);  // Only count confirmed UTXOs
+    }
+
     public float getMaturingBalance() {
-        float total = 0;
-        for (TransactionOutput utxo : Blockchain.UTXOs.values()) {
-            // Only include UTXOs that belong to this wallet and have NOT yet reached the minimum confirmations
-            if (utxo.isMine(StringUtil.getStringFromKey(publicKey)) && utxo.confirmations < MINIMUM_CONFIRMATIONS) {
-                total += utxo.value;
-            }
-        }
-        return total;
+        return calculateBalance(false);  // Include unconfirmed UTXOs
     }
 
     public Transaction sendFunds(String recipient, float value) {
+        // Step 0: Special handling for zero-value transactions
+        if (value == 0) {
+            System.out.println("Creating a zero-value transaction.");
+            Transaction zeroTransaction = new Transaction(StringUtil.getStringFromKey(publicKey), recipient, 0, new ArrayList<>());
+            zeroTransaction.generateSignature(privateKey);
+            return zeroTransaction;
+        }
+
         // Step 1: Ensure the wallet has enough matured funds to send the transaction
         if (getBalance() < value) {
             System.out.println("#Not Enough funds to send transaction. Transaction Discarded.");
@@ -73,29 +80,36 @@ public class Wallet {
 
         // Step 2: Gather UTXOs that belong to the wallet and are fully matured (have enough confirmations)
         for (TransactionOutput utxo : Blockchain.UTXOs.values()) {
-            // Check if the UTXO belongs to the wallet and has enough confirmations
-            if (utxo.isMine(StringUtil.getStringFromKey(publicKey)) && utxo.confirmations >= MINIMUM_CONFIRMATIONS) {
+            if (utxo.isMine(StringUtil.getStringFromKey(publicKey)) && utxo.confirmations >= Blockchain.MINIMUM_CONFIRMATIONS) {
                 total += utxo.value;
                 inputs.add(new TransactionInput(utxo.id));
-                if (total > value) break;  // Stop if we have enough inputs to cover the value
+                if (total >= value) break;  // Stop if we have enough to cover the transaction
             }
         }
 
-        // Step 3: Create the transaction if we have enough inputs to cover the value
+        // Step 3: Check if we gathered enough inputs to cover the value
         if (total < value) {
             System.out.println("#Not enough confirmed UTXOs to cover the transaction. Transaction Discarded.");
             return null;
         }
 
-        // Create a new transaction with the gathered inputs
+        // Step 4: Create the transaction with the gathered inputs
         Transaction newTransaction = new Transaction(StringUtil.getStringFromKey(publicKey), recipient, value, inputs);
         newTransaction.generateSignature(privateKey);
 
-        // Step 4: Remove the spent UTXOs from the UTXO pool
-        for (TransactionInput input : inputs) {
-            Blockchain.UTXOs.remove(input.transactionOutputId);
+        // Step 5: Handle change (if any) to return excess funds to the sender
+        float change = total - value;
+        if (change > 0) {
+            System.out.println("Returning change of " + change + " to sender.");
+            newTransaction.outputs.add(new TransactionOutput(StringUtil.getStringFromKey(publicKey), change, newTransaction.transactionId));
         }
-        return newTransaction;
+
+        // Step 6: Add recipient's output
+        newTransaction.outputs.add(new TransactionOutput(recipient, value, newTransaction.transactionId));
+
+        // Do not remove UTXOs here! UTXO removal will happen during transaction processing
+
+        return newTransaction;  // Transaction is ready for broadcast
     }
 
     // Save the wallet (keys) to a file

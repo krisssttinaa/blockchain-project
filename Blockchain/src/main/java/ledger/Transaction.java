@@ -17,7 +17,7 @@ public class Transaction {
     public List<TransactionOutput> outputs = new ArrayList<>(); // outputs created by this transaction
     private static int sequence = 0; // to ensure transaction uniqueness
     public static float minimumTransaction = 0; // Minimum transaction value
-    private int numberOfConfirmations = 5; // Number of confirmations for the transaction
+    private int numberOfConfirmations = 3; // Number of confirmations for the transaction
 
     public Transaction(String from, String to, float value, List<TransactionInput> inputs) {
         this.sender = from;
@@ -47,13 +47,12 @@ public class Transaction {
             Blockchain.UTXOs.put(outputs.get(0).id, outputs.get(0));
             return true;
         }
-
         if (value == 0) {
             System.out.println("Processing zero-value transaction.");
             transactionId = calculateHash();
             return true;
         }
-        // Step 1: Verify the signature
+        // Step 1: Verify the transaction signature
         if (!verifySignature()) {
             System.out.println("#Transaction Signature failed to verify");
             return false;
@@ -62,18 +61,22 @@ public class Transaction {
         float inputSum = 0;
         for (TransactionInput input : inputs) {
             input.UTXO = Blockchain.UTXOs.get(input.transactionOutputId);
-            if (input.UTXO == null || !input.UTXO.isMine(sender)) {
-                System.out.println("#Referenced input is invalid or does not belong to the sender");
+            if (input.UTXO == null) {
+                System.out.println("#Referenced input is invalid or missing: " + input.transactionOutputId);
                 return false;
             }
-            // Ensure UTXO is mature enough to be spent (e.g., at least 5 confirmations)
-            if (input.UTXO.confirmations < numberOfConfirmations) {
-                System.out.println("#UTXO is not mature enough to be spent. Required confirmations: 5");
+            if (!input.UTXO.isMine(sender)) {
+                System.out.println("#Referenced input does not belong to the sender: " + input.transactionOutputId);
+                return false;
+            }
+            // Ensure UTXO is mature enough to be spent
+            if (input.UTXO.confirmations < Blockchain.MINIMUM_CONFIRMATIONS) {
+                System.out.println("#UTXO is not mature enough to be spent. Required confirmations: " + Blockchain.MINIMUM_CONFIRMATIONS);
                 return false;
             }
             inputSum += input.UTXO.value;
         }
-        // Step 3: Check for double-spending in the unconfirmed pool
+        // Step 3: Check for double-spending in the unconfirmed transaction pool
         for (Transaction pendingTx : Blockchain.unconfirmedTransactions) {
             for (TransactionInput pendingInput : pendingTx.inputs) {
                 if (inputs.stream().anyMatch(i -> i.transactionOutputId.equals(pendingInput.transactionOutputId))) {
@@ -82,26 +85,22 @@ public class Transaction {
                 }
             }
         }
-        // Step 4: Check if inputs are sufficient to cover the value
+        // Step 4: Check if inputs are sufficient to cover the transaction value
         if (inputSum < value) {
-            System.out.println("#Not enough input value to cover the transaction.");
+            System.out.println("#Not enough input value to cover the transaction. Required: " + value + ", Available: " + inputSum);
             return false;
         }
-        // Check if the transaction meets the minimum transaction value
+        // Ensure the transaction meets the minimum transaction value
         if (inputSum < minimumTransaction) {
             System.out.println("#Transaction Inputs too small: " + inputSum);
             return false;
         }
-        // Step 5: Generate outputs for recipient and sender
+        // Step 5: Generate outputs for recipient and sender (change)
         transactionId = calculateHash();
-        outputs.add(new TransactionOutput(recipient, value, transactionId));  // Recipient's output
-        outputs.add(new TransactionOutput(sender, inputSum - value, transactionId));  // Change back to sender
-        // Step 6: Update UTXOs
-        for (TransactionOutput output : outputs) {
-            Blockchain.UTXOs.put(output.id, output);  // Add outputs to UTXO pool
-        }
-        for (TransactionInput input : inputs) {
-            Blockchain.UTXOs.remove(input.transactionOutputId);  // Remove used UTXOs
+        outputs.add(new TransactionOutput(recipient, value, transactionId));  // Add recipient's output
+        // Return change to sender if input sum is greater than the value being sent
+        if (inputSum > value) {
+            outputs.add(new TransactionOutput(sender, inputSum - value, transactionId));  // Change output
         }
         return true;
     }
