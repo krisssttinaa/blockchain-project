@@ -2,8 +2,6 @@ package blockchain;
 
 import networking.NetworkManager;
 import ledger.Wallet;
-
-import java.io.File;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;

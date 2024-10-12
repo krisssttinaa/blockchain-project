@@ -17,7 +17,6 @@ public class Transaction {
     public List<TransactionOutput> outputs = new ArrayList<>(); // outputs created by this transaction
     private static int sequence = 0; // to ensure transaction uniqueness
     public static float minimumTransaction = 0; // Minimum transaction value
-    private int numberOfConfirmations = 3; // Number of confirmations for the transaction
 
     public Transaction(String from, String to, float value, List<TransactionInput> inputs) {
         this.sender = from;

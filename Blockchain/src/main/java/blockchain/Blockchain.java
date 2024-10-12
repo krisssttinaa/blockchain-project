@@ -140,6 +140,7 @@ public class Blockchain {
         updateUTXOs(block, true);  // Since you're adding the block to the chain, update UTXO pool for main chain
         addBlockHashToTracking(block.getHash());
         ageUTXOs();  // Increment confirmations for all UTXOs
+        System.out.println("UTXOs aged and updated.");
         return true;
     }
 
@@ -177,7 +178,6 @@ public class Blockchain {
 
     public void ageUTXOs() {
         for (TransactionOutput utxo : Blockchain.UTXOs.values()) {
-            //System.out.println("Aging UTXO with ID: " + utxo.id + " in block: " + utxo.parentTransactionId);
             Block containingBlock = getBlockByTransactionId(utxo.parentTransactionId);
             if (isBlockInMainChain(containingBlock)) {
                 if (utxo.confirmations < MINIMUM_CONFIRMATIONS) {
@@ -195,9 +195,7 @@ public class Blockchain {
             System.out.println("Block is part of a fork, not adding UTXOs.");
             return;
         }
-
         for (Transaction transaction : block.getTransactions()) {
-            // Skip UTXO input handling for zero-value transactions
             if (transaction.value == 0) {
                 System.out.println("Skipping UTXO input handling for zero-value transaction.");
                 continue;  // Skip directly to handling outputs
@@ -206,23 +204,30 @@ public class Blockchain {
             // Remove spent UTXOs referenced in the transaction's inputs
             for (TransactionInput input : transaction.getInputs()) {
                 TransactionOutput utxo = Blockchain.UTXOs.get(input.transactionOutputId);
-                // Check if the UTXO is fully matured before spending it
-                if (utxo != null && utxo.confirmations >= MINIMUM_CONFIRMATIONS) {
-                    Blockchain.UTXOs.remove(input.transactionOutputId);
-                    System.out.println("UTXO removed: " + input.transactionOutputId);
+                if (utxo != null) {
+                    System.out.println("UTXO found for input: " + input.transactionOutputId + " | Confirmations: " + utxo.confirmations);
+                    if (utxo.confirmations >= MINIMUM_CONFIRMATIONS) {
+                        Blockchain.UTXOs.remove(input.transactionOutputId);
+                        System.out.println("UTXO removed: " + input.transactionOutputId);
+                    } else {
+                        System.out.println("Attempted to spend immature UTXO: " + input.transactionOutputId + ". Ignored.");
+                    }
                 } else {
-                    System.out.println("Attempted to spend immature UTXO: " + input.transactionOutputId + ". Ignored.");
+                    System.out.println("UTXO not found for input: " + input.transactionOutputId);
                 }
             }
 
             // Add new UTXOs created by the transaction
             for (TransactionOutput output : transaction.getOutputs()) {
-                Blockchain.UTXOs.put(output.id, output);
-                System.out.println("UTXO added: " + output.id);
+                if (!Blockchain.UTXOs.containsKey(output.id)) {
+                    Blockchain.UTXOs.put(output.id, output);
+                    System.out.println("UTXO added: " + output.id + " | Recipient: " + output.recipient + " | Value: " + output.value);
+                } else {
+                    System.out.println("UTXO already exists: " + output.id + " | Skipping.");
+                }
             }
         }
     }
-
 
     synchronized void revertUTXOs(Block block) {
         for (Transaction transaction : block.getTransactions()) {
@@ -297,3 +302,24 @@ public class Blockchain {
     }
     public List<Block> getChain() { return chain; }
 }
+/*
+    public void printUTXOPool() {
+        System.out.println("Current UTXO Pool:");
+        System.out.println("----------------------------------------------------------");
+        System.out.printf("%-40s %-20s %-10s %-15s\n", "UTXO ID", "Recipient", "Value", "Confirmations");
+        System.out.println("----------------------------------------------------------");
+
+        for (Map.Entry<String, TransactionOutput> entry : Blockchain.UTXOs.entrySet()) {
+            String utxoId = entry.getKey();
+            TransactionOutput utxo = entry.getValue();
+            String recipient = utxo.recipient;
+            float value = utxo.value;
+            int confirmations = utxo.confirmations;
+
+            // Print formatted UTXO details
+            System.out.printf("%-40s %-20s %-10.2f %-15d\n", utxoId, recipient, value, confirmations);
+        }
+
+        System.out.println("----------------------------------------------------------");
+    }
+ */
