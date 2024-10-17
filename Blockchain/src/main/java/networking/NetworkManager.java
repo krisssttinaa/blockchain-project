@@ -1,6 +1,7 @@
 package networking;
 
 import blockchain.Blockchain;
+import blockchain.Constants;
 import blockchain.ForkResolution;
 import blockchain.StringUtil;
 import com.google.gson.Gson;
@@ -16,21 +17,19 @@ import java.util.concurrent.Executors;
 import static blockchain.Main.NODE_PORT;
 
 public class NetworkManager {
-    private final Map<String, PeerInfo> peers = new ConcurrentHashMap<>(); // Store PeerInfo by public key
-    private final ExecutorService networkPool = Executors.newCachedThreadPool(); // Thread pool for networking tasks
-    private Blockchain blockchain;
-    private final PublicKey localPublicKey;
-    private final Gson gson = new Gson(); // Gson instance for JSON handling
-    private static final int MAX_RETRIES = 3; // Maximum number of retry attempts
     private final ForkResolution forkResolution; // Added ForkResolution reference
-    private final BlockchainSyncManager blockchainSyncManager;  // New SyncManager instance
     private GossipManager gossipManager; // NEW: Reference to the GossipManager
     private PingManager pingManager; // NEW: Reference to the PingManager
+    private Blockchain blockchain;
+    private final Map<String, PeerInfo> peers = new ConcurrentHashMap<>(); // Store PeerInfo by public key
+    private final ExecutorService networkPool = Executors.newCachedThreadPool(); // Thread pool for networking tasks
+    private final PublicKey localPublicKey;
+    private final Gson gson = new Gson(); // Gson instance for JSON handling
+    private static final int MAX_RETRIES = Constants.MAX_RETRIES; // Maximum number of retry attempts
 
     public NetworkManager(PublicKey localPublicKey, ForkResolution forkResolution) {
         this.localPublicKey = localPublicKey;
         this.forkResolution = forkResolution; // Initialize the ForkResolution
-        this.blockchainSyncManager = new BlockchainSyncManager(blockchain, this);
         startServer(); // Start the server to accept incoming connections on the same port (7777)
         gossipManager = new GossipManager(peers, networkPool, gson, this);
         pingManager = new PingManager(peers, networkPool, gson, this);
@@ -272,7 +271,44 @@ public class NetworkManager {
         }
     }
 
-    public void syncWithPeers(int latestIndex) {blockchainSyncManager.syncWithPeers(latestIndex);}
+    public void syncWithPeers(int latestIndex) { // Syncing process
+        int currentIndex = blockchain.getLastBlock().getIndex();
+        int blocksToFetch = latestIndex - currentIndex;
+        if (blocksToFetch <= 0) {
+            System.out.println("No blocks to sync. Already up to date.");
+            return;
+        }
+
+        System.out.println("Syncing " + blocksToFetch + " blocks from peers.");
+        // Filter the list of peers to only include those that are connected
+        List<PeerInfo> connectedPeers = peers.values().stream()
+                .filter(PeerInfo::isConnected)  // Only peers that are actually connected
+                .toList();  // Collect into a list
+        if (connectedPeers.isEmpty()) {
+            System.out.println("No connected peers available for syncing.");
+            return;
+        }
+
+        // Divide the blocks to fetch across connected peers
+        int blocksPerPeer = Math.max(1, blocksToFetch / connectedPeers.size());
+        for (int i = 0; i < connectedPeers.size(); i++) {
+            PeerInfo peer = connectedPeers.get(i);
+            int startIndex = currentIndex + i * blocksPerPeer;
+            int endIndex = Math.min(startIndex + blocksPerPeer, latestIndex);
+            requestBlocksFromPeer(peer, startIndex, endIndex);
+        }
+    }
+
+    private void requestBlocksFromPeer(PeerInfo peer, int startIndex, int endIndex) { // Request specific block range from a peer
+        System.out.println("Requesting blocks " + startIndex + " to " + endIndex + " from peer " + peer.getIpAddress());
+        String requestData = startIndex + "," + endIndex;
+        Message blockRequest = new Message(MessageType.BLOCK_REQUEST, requestData);
+        try {
+            sendMessageToPeer(peer.getSocket(), blockRequest);
+        } catch (IOException e) {
+            System.err.println("Failed to request blocks from peer " + peer.getIpAddress() + ": " + e.getMessage());
+        }
+    }
 
     public boolean isPeerConnected(String ipAddress) {
         Optional<PeerInfo> peerInfo = peers.values().stream()

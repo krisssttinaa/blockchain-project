@@ -57,46 +57,9 @@ public class StringUtil {
         }
     }
 
-    // Converts the signature bytes into a hexadecimal string
-    public static String bytesToHex(byte[] bytes) {
-        StringBuilder hexString = new StringBuilder();
-        for (byte b : bytes) {
-            String hex = Integer.toHexString(0xff & b);
-            if (hex.length() == 1) hexString.append('0');
-            hexString.append(hex);
-        }
-        return hexString.toString();
-    }
-
-    // Use this method when displaying the signature
-    public static String applyECDSASigAndGetString(PrivateKey privateKey, String input) {
-        byte[] sig = applyECDSASig(privateKey, input);
-        return bytesToHex(sig);
-    }
-
-    // Method to convert a byte array to an SHA-256 hash byte array
-    public static byte[] applySha256(byte[] input) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return digest.digest(input);
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     // Gets the encoded string from any key.
     public static String getStringFromKey(Key key) {
         return Base64.getEncoder().encodeToString(key.getEncoded());
-    }
-
-    // Helper method to perform SHA-256 hashing
-    private static byte[] sha256(byte[] data) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            return md.digest(data);
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e); // Handle exception appropriately
-        }
     }
 
     public synchronized static PublicKey getKeyFromString(String key) {

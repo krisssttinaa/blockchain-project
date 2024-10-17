@@ -15,17 +15,17 @@ import java.util.concurrent.*;
 
 public class Blockchain {
     public static final ConcurrentHashMap<String, TransactionOutput> UTXOs = new ConcurrentHashMap<>(); // Instance-level UTXO pool
-    public static final int MINIMUM_CONFIRMATIONS = 3;
+    public static final int MINIMUM_CONFIRMATIONS = Constants.MINIMUM_CONFIRMATIONS;
+    public static final int MAX_HASH_COUNT = Constants.MAX_HASH_COUNT;
     public static ConcurrentLinkedQueue<Transaction> unconfirmedTransactions = new ConcurrentLinkedQueue<>(); // Unconfirmed transaction pool using ConcurrentLinkedQueue
     private final List<Block> chain;
     private NetworkManager networkManager;
     private final Deque<String> receivedBlockHashes = new ConcurrentLinkedDeque<>(); // Track recent block hashes
     private final LRUCache<String, Boolean> receivedTransactions = new LRUCache<>(500); // Capacity of 500
     private final ExecutorService miningExecutor = Executors.newSingleThreadExecutor(); // A single thread for mining
-    private final int numTransactionsToMine = 2; // Number of transactions to mine in a block
-    private final float miningReward = 6.00f;
-    private final int MAX_HASH_COUNT = 300;  // Keep only the last 300 block hashes, track only the most recent block hashes
-    private final int difficulty = 6; // Mining difficulty
+    private final int numTransactionsToMine = Constants.NUM_TRANSACTIONS_TO_MINE; // Number of transactions to mine in a block
+    private final float miningReward = Constants.MINING_REWARD; // Mining reward
+    private final int difficulty = Constants.MINING_DIFFICULTY; // Mining difficulty
     private int peerChainTipIndex = -1;  // New field to store the peer's chain tip index
 
     public Blockchain() {

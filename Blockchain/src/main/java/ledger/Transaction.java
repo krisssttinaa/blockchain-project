@@ -1,6 +1,7 @@
 package ledger;
 
 import blockchain.Blockchain;
+import blockchain.Constants;
 import blockchain.StringUtil;
 import java.security.PrivateKey;
 import java.security.PublicKey;
@@ -16,7 +17,7 @@ public class Transaction {
     public List<TransactionInput> inputs = new ArrayList<>(); // previous transaction outputs being used as inputs
     public List<TransactionOutput> outputs = new ArrayList<>(); // outputs created by this transaction
     private static int sequence = 0; // to ensure transaction uniqueness
-    public static float minimumTransaction = 0; // Minimum transaction value
+    public static final float minimumTransaction = Constants.MINIMUM_TRANSACTION; // Minimum transaction value
 
     public Transaction(String from, String to, float value, List<TransactionInput> inputs) {
         this.sender = from;

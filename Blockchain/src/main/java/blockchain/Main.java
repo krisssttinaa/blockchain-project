@@ -10,8 +10,8 @@ import java.security.Security;
 import java.util.*;
 
 public class Main {
-    private static final String SEED_NODE_ADDRESS = "172.18.0.2"; // Seed node IP
-    public static final int NODE_PORT = 7777;
+    private static final String SEED_NODE_ADDRESS = Constants.SEED_NODE_ADDRESS; // Seed node IP
+    public static final int NODE_PORT = Constants.NODE_PORT;  // Node port
     public static String minerAddress;
     public static boolean syncTriggered = false; // Prevent multiple syncs
 

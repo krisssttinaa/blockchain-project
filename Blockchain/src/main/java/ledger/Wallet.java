@@ -1,6 +1,7 @@
 package ledger;
 
 import blockchain.Blockchain;
+import blockchain.Constants;
 import blockchain.StringUtil;
 import java.io.*;
 import java.security.*;
@@ -10,7 +11,7 @@ import java.util.ArrayList;
 public class Wallet {
     private PrivateKey privateKey;
     public PublicKey publicKey;
-    private static final String WALLET_FILE = "wallet.dat";  // File to store wallet keys
+    private static final String WALLET_FILE = Constants.WALLET_FILE;  // File to store wallet keys
 
     public Wallet() {
         // If wallet file exists, load it, otherwise create a new wallet
