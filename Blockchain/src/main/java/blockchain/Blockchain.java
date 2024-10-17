@@ -222,14 +222,41 @@ public class Blockchain {
     }
 
     synchronized void revertUTXOs(Block block) {
+        int currentChainLength = this.getChain().size(); // Get the current length of the blockchain
+
         for (Transaction transaction : block.getTransactions()) {
+            // Step 1: Remove outputs created by this block's transactions
             for (TransactionOutput output : transaction.getOutputs()) {
                 Blockchain.UTXOs.remove(output.id);
                 System.out.println("Reverted UTXO removed: " + output.id);
             }
+
+            // Step 2: Re-add inputs that were used in this block's transactions
             for (TransactionInput input : transaction.getInputs()) {
                 if (input.UTXO != null) {
-                    Blockchain.UTXOs.put(input.transactionOutputId, input.UTXO);
+                    TransactionOutput revertedOutput = input.UTXO;
+
+                    // Find the block containing the transaction that created this UTXO
+                    Block blockContainingUTXO = getBlockByTransactionId(revertedOutput.parentTransactionId);
+                    if (blockContainingUTXO != null) {
+                        int blockIndexContainingUTXO = blockContainingUTXO.getIndex();
+                        int realConfirmationCount = currentChainLength - blockIndexContainingUTXO;
+
+                        if (realConfirmationCount <= Blockchain.MINIMUM_CONFIRMATIONS) {
+                            // Only decrement if the confirmation count is within the minimum threshold
+                            if (revertedOutput.confirmations > 0) {
+                                revertedOutput.confirmations--;
+                                System.out.println("Decremented confirmations for UTXO: " + input.transactionOutputId);
+                            }
+                        } else {
+                            // If the "real" confirmation count exceeds the threshold, leave it as is
+                            System.out.println("UTXO with ID: " + input.transactionOutputId + " remains at max confirmations.");
+                        }
+                    } else {
+                        System.out.println("Error: Block containing UTXO not found during revert: " + input.transactionOutputId);
+                    }
+
+                    Blockchain.UTXOs.put(input.transactionOutputId, revertedOutput);
                     System.out.println("Reverted UTXO re-added: " + input.transactionOutputId);
                 } else {
                     System.out.println("Error: UTXO missing for input during revert: " + input.transactionOutputId);

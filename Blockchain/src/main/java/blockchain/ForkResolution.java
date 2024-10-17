@@ -102,21 +102,17 @@ public class ForkResolution implements Runnable {
             System.out.println("No competing fork found at index: " + forkIndex);
             return;
         }
-
         for (Block forkedBlock : forkedBlocks) {
             // Calculate the length of the forked chain starting from the forked block
             List<Block> potentialForkChain = getExtendedForkChain(forkedBlock);
-
             // Compare the forked chain length to the current chain length beyond the fork point
             int currentChainLengthFromFork = blockchain.getChain().size() - forkIndex;
-
             if (potentialForkChain.size() > currentChainLengthFromFork) {
                 System.out.println("Competing fork is longer. Reorganizing chain...");
                 reorganizeChain(potentialForkChain);
                 return; // We reorganized, no need to check other forks at this index
             }
         }
-
         System.out.println("Current chain is longer or equal. No reorganization needed.");
     }
 
@@ -131,11 +127,9 @@ public class ForkResolution implements Runnable {
         // Try to extend the chain using the blocks in the forks map
         while (true) {
             List<Block> nextBlocks = forks.get(currentIndex);
-
             if (nextBlocks == null || nextBlocks.isEmpty()) {
                 break; // No more extensions possible
             }
-
             // Find a block in nextBlocks that matches the previous hash
             Block nextBlock = null;
             for (Block block : nextBlocks) {
@@ -148,14 +142,10 @@ public class ForkResolution implements Runnable {
             if (nextBlock == null) {
                 break; // No valid extension found for this fork
             }
-
-            // Add the next block to the extended chain
-            extendedChain.add(nextBlock);
-            // Update the index and previous hash to extend further
-            currentIndex++;
+            extendedChain.add(nextBlock);// Add the next block to the extended chain
+            currentIndex++; // Update the index and previous hash to extend further
             previousHash = nextBlock.getHash();
         }
-
         return extendedChain;
     }
 
@@ -164,10 +154,8 @@ public class ForkResolution implements Runnable {
 
         // Step 1: Rollback the current chain to the fork point
         List<Block> discardedBlocks = rollbackToFork(competingChain.get(0).getIndex() - 1);
-
         // Step 2: Re-add transactions from discarded blocks to the unconfirmed pool
         blockchain.reAddTransactionsFromDiscardedBlocks(discardedBlocks);
-
         // Step 3: Validate and add the competing chain
         for (Block block : competingChain) {
             if (!blockchain.addAndValidateBlock(block)) {
@@ -175,7 +163,6 @@ public class ForkResolution implements Runnable {
                 return; // Abort if fork chain is invalid
             }
             System.out.println("Fork block added to the chain: " + block.getHash());
-
             // Ensure UTXOs and confirmations are updated correctly for each block
             blockchain.updateUTXOs(block, true);
             blockchain.ageUTXOs();  // Increment confirmations as each block is re-added
@@ -186,32 +173,19 @@ public class ForkResolution implements Runnable {
     private List<Block> rollbackToFork(int forkIndex) {
         System.out.println("Rolling back chain to index: " + forkIndex);
         List<Block> discardedBlocks = new ArrayList<>();
-
         while (blockchain.getLastBlock().getIndex() > forkIndex) {
             Block discardedBlock = blockchain.getLastBlock();
             discardedBlocks.add(discardedBlock);
-
-            // Step 1: Revert UTXOs for transactions in the discarded block
             blockchain.revertUTXOs(discardedBlock);
-
-            // Step 2: Remove the block from the chain
             blockchain.removeLastBlock();
-
             System.out.println("Discarded block: " + discardedBlock.getHash());
         }
         return discardedBlocks;
     }
 
-    public void addBlock(Block block) {
-        blockQueue.add(block);
-    }
-
+    public void addBlock(Block block) {blockQueue.add(block);}
     private void addBlockToForks(Block block) {
         forks.computeIfAbsent(block.getIndex(), k -> new ArrayList<>()).add(block);
         revertCoinbaseTransaction(block);
-    }
-
-    public List<Block> getForkedBlocks(int index) {
-        return forks.getOrDefault(index, Collections.emptyList());
     }
 }
