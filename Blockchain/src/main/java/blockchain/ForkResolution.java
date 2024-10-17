@@ -24,6 +24,11 @@ public class ForkResolution implements Runnable {
             try {
                 Block block = blockQueue.take();  // Blocks until a block is available in the queue
                 processBlock(block);
+                // Check if we need to recalculate UTXOs after syncing completes
+                if (isSyncComplete()) {
+                    blockchain.recalculateUTXOConfirmations();  // Recalculate UTXOs after sync completes
+                    blockchain.setPeerChainTipIndex(-1);
+                }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 System.err.println("ForkResolution thread interrupted");
@@ -181,6 +186,13 @@ public class ForkResolution implements Runnable {
             System.out.println("Discarded block: " + discardedBlock.getHash());
         }
         return discardedBlocks;
+    }
+
+    private boolean isSyncComplete() {
+        // Sync is complete when the local chain tip matches the peer's chain tip
+        int localChainTip = blockchain.getCurrentChainTip();
+        int peerChainTip = blockchain.getPeerChainTipIndex();
+        return peerChainTip != -1 && localChainTip >= peerChainTip;
     }
 
     public void addBlock(Block block) {blockQueue.add(block);}

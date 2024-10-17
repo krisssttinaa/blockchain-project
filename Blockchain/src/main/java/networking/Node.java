@@ -146,7 +146,7 @@ public class Node implements Runnable {
     private void handleBlockchainTipResponse(Message message) {
         try {
             int tipIndex = Integer.parseInt(message.getData());
-            // log("Received blockchain tip from peer " + peerIp + ": " + tipIndex);
+            blockchain.setPeerChainTipIndex(tipIndex);
             networkManager.syncWithPeers(tipIndex);
         } catch (NumberFormatException e) {
             log("Invalid blockchain tip received from peer " + peerIp + ": " + message.getData());

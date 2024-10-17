@@ -279,18 +279,22 @@ public class NetworkManager {
         }
 
         System.out.println("Syncing " + blocksToFetch + " blocks from peers.");
-        List<PeerInfo> availablePeers = new ArrayList<>(peers.values());
+        // Filter the list of peers to only include those that are connected
+        List<PeerInfo> connectedPeers = peers.values().stream()
+                .filter(PeerInfo::isConnected)  // Only peers that are actually connected
+                .toList();  // Collect into a list
+        if (connectedPeers.isEmpty()) {
+            System.out.println("No connected peers available for syncing.");
+            return;
+        }
 
-        // Divide the blocks to fetch across peers
-        int blocksPerPeer = Math.max(1, blocksToFetch / availablePeers.size());
-        for (int i = 0; i < availablePeers.size(); i++) {
-            PeerInfo peer = availablePeers.get(i);
+        // Divide the blocks to fetch across connected peers
+        int blocksPerPeer = Math.max(1, blocksToFetch / connectedPeers.size());
+        for (int i = 0; i < connectedPeers.size(); i++) {
+            PeerInfo peer = connectedPeers.get(i);
             int startIndex = currentIndex + i * blocksPerPeer;
             int endIndex = Math.min(startIndex + blocksPerPeer, latestIndex);
-
-            if (peer.isConnected()) {
-                requestBlocksFromPeer(peer, startIndex, endIndex);
-            }
+            requestBlocksFromPeer(peer, startIndex, endIndex);
         }
     }
 

@@ -26,6 +26,7 @@ public class Blockchain {
     private final float miningReward = 6.00f;
     private final int MAX_HASH_COUNT = 300;  // Keep only the last 300 block hashes, track only the most recent block hashes
     private final int difficulty = 6; // Mining difficulty
+    private int peerChainTipIndex = -1;  // New field to store the peer's chain tip index
 
     public Blockchain() {
         this.chain = new ArrayList<>();
@@ -265,6 +266,32 @@ public class Blockchain {
         }
     }
 
+    public void recalculateUTXOConfirmations() {
+        System.out.println("Recalculating UTXO confirmations based on the local blockchain state...");
+
+        // Reset confirmations for all UTXOs to zero initially
+        for (TransactionOutput utxo : Blockchain.UTXOs.values()) {
+            utxo.confirmations = 0;
+        }
+
+        // Iterate over the entire blockchain to update the confirmations
+        for (int i = 0; i < chain.size(); i++) {
+            Block block = chain.get(i);
+            int confirmationsFromTip = chain.size() - i;
+
+            for (Transaction transaction : block.getTransactions()) {
+                for (TransactionOutput output : transaction.getOutputs()) {
+                    TransactionOutput utxo = Blockchain.UTXOs.get(output.id);
+                    if (utxo != null) {
+                        utxo.confirmations = Math.min(confirmationsFromTip, MINIMUM_CONFIRMATIONS);
+                        System.out.println("Updated UTXO ID: " + utxo.id + " | New confirmations: " + utxo.confirmations);
+                    }
+                }
+            }
+        }
+        System.out.println("UTXO confirmations recalculated.");
+    }
+
     public void reAddTransactionsFromDiscardedBlocks(List<Block> discardedBlocks) {
         for (Block block : discardedBlocks) {
             for (Transaction transaction : block.getTransactions()) {
@@ -317,6 +344,9 @@ public class Blockchain {
         System.out.println(blockchainJson);
     }
 
+    public int getPeerChainTipIndex() {return peerChainTipIndex;}
+    public void setPeerChainTipIndex(int peerChainTipIndex) {this.peerChainTipIndex = peerChainTipIndex;}
+    public int getCurrentChainTip() {return chain.size() - 1;}
     public boolean isBlockInMainChain(Block block) { return chain.contains(block); }
     public int getNumTransactionsToMine() { return numTransactionsToMine; }
     public Deque<String> getReceivedBlockHashes() { return receivedBlockHashes; }
