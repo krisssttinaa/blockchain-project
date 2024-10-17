@@ -14,25 +14,59 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import static blockchain.Main.NODE_PORT;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class NetworkManager {
     private final ForkResolution forkResolution; // Added ForkResolution reference
-    private GossipManager gossipManager; // NEW: Reference to the GossipManager
-    private PingManager pingManager; // NEW: Reference to the PingManager
     private Blockchain blockchain;
     private final Map<String, PeerInfo> peers = new ConcurrentHashMap<>(); // Store PeerInfo by public key
     private final ExecutorService networkPool = Executors.newCachedThreadPool(); // Thread pool for networking tasks
     private final PublicKey localPublicKey;
     private final Gson gson = new Gson(); // Gson instance for JSON handling
     private static final int MAX_RETRIES = Constants.MAX_RETRIES; // Maximum number of retry attempts
+    private static final int NODE_PORT = Constants.NODE_PORT; // Node's listening port
+    private final BlockingQueue<OutgoingMessage> outgoingMessageQueue = new LinkedBlockingQueue<>();
+    private final Thread outgoingWorkerThread;
 
     public NetworkManager(PublicKey localPublicKey, ForkResolution forkResolution) {
         this.localPublicKey = localPublicKey;
         this.forkResolution = forkResolution; // Initialize the ForkResolution
         startServer(); // Start the server to accept incoming connections on the same port (7777)
-        gossipManager = new GossipManager(peers, networkPool, gson, this);
-        pingManager = new PingManager(peers, networkPool, gson, this);
+        new GossipManager(peers, networkPool, gson, this);
+        new PingManager(peers, networkPool, this);
+        outgoingWorkerThread = new Thread(this::processOutgoingMessages);
+        outgoingWorkerThread.start();
+    }
+
+    private static class OutgoingMessage {
+        private final Socket socket;
+        private final Message message;
+
+        public OutgoingMessage(Socket socket, Message message) {
+            this.socket = socket;
+            this.message = message;
+        }
+    }
+
+    private void processOutgoingMessages() {
+        while (true) {
+            try {
+                OutgoingMessage task = outgoingMessageQueue.take();
+                sendMessageToPeer(task.socket, task.message);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                System.err.println("Outgoing message worker interrupted.");
+                break;
+            } catch (IOException e) {
+                System.err.println("Failed to send outgoing message: " + e.getMessage());
+            }
+        }
+    }
+
+    // Enqueue the message to the outgoing queue
+    public synchronized void sendOutgoingMessage(Socket socket, Message message) {
+        outgoingMessageQueue.add(new OutgoingMessage(socket, message));
     }
 
     public void startServer() { // Starts the server to accept incoming connections
@@ -141,12 +175,7 @@ public class NetworkManager {
             peers.forEach((publicKey, peerInfo) -> {
                 Socket socket = peerInfo.getSocket();
                 if (peerInfo.isConnected() && socket != null) {
-                    try {
-                        sendMessageToPeer(socket, message);
-                    } catch (IOException e) {
-                        System.err.println("Failed to send message to peer " + peerInfo.getIpAddress() + ": " + e.getMessage());
-                        peerInfo.setConnected(false); // Mark the peer as disconnected
-                    }
+                    sendOutgoingMessage(socket, message);
                 }
             });
         } catch (Exception e) {
@@ -157,12 +186,7 @@ public class NetworkManager {
     public void broadcastMessageExceptSender(Message message, String senderIp) {
         peers.forEach((publicKey, peerInfo) -> {
             if (!peerInfo.getIpAddress().equals(senderIp) && peerInfo.isConnected()) {
-                try {
-                    sendMessageToPeer(peerInfo.getSocket(), message); // Send the message to other peers
-                } catch (IOException e) {
-                    System.err.println("Failed to send message to peer " + peerInfo.getIpAddress() + ": " + e.getMessage());
-                    peerInfo.setConnected(false); // Mark the peer as disconnected if there was an issue
-                }
+                sendOutgoingMessage(peerInfo.getSocket(), message); // Send the message to other peers
             }
         });
     }
@@ -230,11 +254,7 @@ public class NetworkManager {
         }
         Socket seedNodeSocket = seedNodePeer.getSocket();
         Message peerDiscoveryRequest = new Message(MessageType.PEER_DISCOVERY_REQUEST, "Requesting peer list from seed node");
-        try {
-            sendMessageToPeer(seedNodeSocket, peerDiscoveryRequest); // Reuse the existing connection
-        } catch (IOException e) {
-            System.err.println("Failed to request peer list from seed node: " + e.getMessage());
-        }
+        sendOutgoingMessage(seedNodeSocket, peerDiscoveryRequest); // Reuse the existing connection
     }
 
     public void requestChainTipFromPeers() {
@@ -259,13 +279,8 @@ public class NetworkManager {
             // We just send the message using the existing connection (no need for a new Node instance)
             Message tipRequest = new Message(MessageType.TIP_REQUEST, "Requesting blockchain tip");
 
-            try {
-                sendMessageToPeer(peerSocket, tipRequest);  // Use the sendMessageToPeer method in NetworkManager
-                System.out.println("Blockchain tip request sent to peer: " + peerInfo.getIpAddress());
-            } catch (IOException e) {
-                System.err.println("Failed to send blockchain tip request to peer: " + peerInfo.getIpAddress());
-                throw e;
-            }
+            sendOutgoingMessage(peerSocket, tipRequest);  // Use the sendMessageToPeer method in NetworkManager
+            System.out.println("Blockchain tip request sent to peer: " + peerInfo.getIpAddress());
         } else {
             throw new IOException("Peer socket is unavailable or closed.");
         }
@@ -303,11 +318,7 @@ public class NetworkManager {
         System.out.println("Requesting blocks " + startIndex + " to " + endIndex + " from peer " + peer.getIpAddress());
         String requestData = startIndex + "," + endIndex;
         Message blockRequest = new Message(MessageType.BLOCK_REQUEST, requestData);
-        try {
-            sendMessageToPeer(peer.getSocket(), blockRequest);
-        } catch (IOException e) {
-            System.err.println("Failed to request blocks from peer " + peer.getIpAddress() + ": " + e.getMessage());
-        }
+        sendOutgoingMessage(peer.getSocket(), blockRequest);
     }
 
     public boolean isPeerConnected(String ipAddress) {

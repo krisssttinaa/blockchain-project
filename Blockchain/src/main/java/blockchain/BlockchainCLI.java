@@ -54,7 +54,6 @@ public class BlockchainCLI {
             System.out.println("No connected nodes with wallets available.");
             return;
         }
-
         System.out.println("Choose a recipient:");
         int i = 1;
         for (Map.Entry<String, PeerInfo> entry : peers.entrySet()) {
@@ -70,12 +69,8 @@ public class BlockchainCLI {
             return;
         }
 
-        // Get the selected recipient's public key
         String selectedPublicKey = (String) peers.keySet().toArray()[choice - 1];
-
-        float amount = -1;
-
-        // Keep prompting for a valid amount to send (allowing 0 as a valid amount)
+        float amount;
         while (true) {
             System.out.print("Enter amount to send: ");
             if (scanner.hasNextFloat()) {
@@ -87,14 +82,12 @@ public class BlockchainCLI {
                 scanner.next(); // Consume the invalid input and retry
             }
         }
-
-        // Proceed with creating and broadcasting the transaction
         try {
-            // Step 1: Create a transaction from the sender wallet
             Transaction transaction = senderWallet.sendFunds(selectedPublicKey, amount);
             if (transaction != null) {
                 // Use the new method in Blockchain to handle adding, broadcasting, and mining
                 blockchain.handleNewTransaction(transaction, null, networkManager, forkResolution);
+                System.out.println("DONE");
             } else {
                 System.out.println("Transaction creation failed.");
             }
@@ -112,5 +105,4 @@ public class BlockchainCLI {
         float maturingBalance = senderWallet.getMaturingBalance();
         System.out.println("Maturing Balance: " + maturingBalance);
     }
-
 }

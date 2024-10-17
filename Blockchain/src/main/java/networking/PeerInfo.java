@@ -46,13 +46,6 @@ public class PeerInfo {
 
     public String getIpAddress() {return ipAddress;}
 
-    public void setIpAddress(String ipAddress) {
-        this.ipAddress = ipAddress;
-        printStateChange("setIpAddress");
-    }
-
-    public long getLastPingTime() {return lastPingTime;}
-
     public void setLastPingTime(long lastPingTime) {
         long previousPingTime = this.lastPingTime;
         this.lastPingTime = lastPingTime;
@@ -77,9 +70,5 @@ public class PeerInfo {
 
     private void printStateChange(String method, Socket previousSocket, Socket newSocket) {
         System.out.println("PeerInfo socket changed via " + method + ". IP: " + ipAddress + ", Previous Socket: " + previousSocket + ", New Socket: " + newSocket);
-    }
-
-    private void printStateChange(String method, long previousTime, long newTime) {
-        System.out.println("PeerInfo " + method + " changed. IP: " + ipAddress + ", Previous Time: " + previousTime + ", New Time: " + newTime);
     }
 }

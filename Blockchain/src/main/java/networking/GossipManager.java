@@ -1,7 +1,6 @@
 package networking;
 
 import com.google.gson.Gson;
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -67,13 +66,8 @@ public class GossipManager {
 
         Message gossipMessage = new Message(MessageType.SHARE_PEER_LIST, gson.toJson(peers));
         for (PeerInfo peerInfo : selectedPeers) {
-            try {
-                System.out.println("Gossiping peer list to " + peerInfo.getIpAddress());
-                networkManager.sendMessageToPeer(peerInfo.getSocket(), gossipMessage); // Reuse NetworkManager's method
-            } catch (IOException e) {
-                System.err.println("Failed to send gossip message to peer " + peerInfo.getIpAddress() + ": " + e.getMessage());
-                peerInfo.setConnected(false); // Mark as disconnected on failure
-            }
+            //System.out.println("Gossiping peer list to " + peerInfo.getIpAddress());
+            networkManager.sendOutgoingMessage(peerInfo.getSocket(), gossipMessage); // Reuse NetworkManager's method
         }
     }
 

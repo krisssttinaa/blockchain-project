@@ -54,6 +54,5 @@ public class Block {
     public String getPreviousHash() {return previousHash;}
     public String getHash() {return hash;}
     public List<Transaction> getTransactions() {return transactions;}
-    public long getTimestamp() {return timestamp;}
-    public int getNonce() {return nonce;}
+
 }

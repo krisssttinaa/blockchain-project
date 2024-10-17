@@ -140,30 +140,9 @@ public class Transaction {
         return true;  // The transaction is still valid
     }
 
-    // Returns the total value of inputs (UTXOs) in the transaction
-    public float getInputsValue() {
-        float total = 0;
-        for (TransactionInput i : inputs) {
-            if (i.UTXO == null) continue;
-            total += i.UTXO.value;
-        }
-        return total;
-    }
-
-    // Returns the total value of outputs in the transaction
-    public float getOutputsValue() {
-        float total = 0;
-        for (TransactionOutput o : outputs) {
-            total += o.value;
-        }
-        return total;
-    }
-
     public List<TransactionInput> getInputs() {return inputs;}
     public List<TransactionOutput> getOutputs() {return outputs;}
     public String getTransactionId() {return transactionId;}
-    public void setSender(String sender) {this.sender = sender;}
-    public void setRecipient(String recipient) {this.recipient = recipient;}
     @Override
     public String toString() {
         return "Transaction{" +

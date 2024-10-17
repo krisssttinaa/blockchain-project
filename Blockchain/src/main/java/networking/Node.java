@@ -30,7 +30,7 @@ public class Node implements Runnable {
     private volatile boolean connected = true; // Ensure visibility across threads
     private boolean publicKeyExchanged = false; // Ensure public keys are exchanged
     private final BlockingQueue<Message> messageQueue = new LinkedBlockingQueue<>(); // Queue for incoming messages
-    private volatile boolean running = true;
+    private final boolean running = true;
     private final Thread workerThread;
     String peerPublicKey;
 
@@ -265,7 +265,10 @@ public class Node implements Runnable {
         } catch (IOException e) {
             log("Failed to close socket for peer: " + peerIp + ". Error: " + e.getMessage());
         }
-        String peerPublicKey = StringUtil.getStringFromKey(networkManager.getPeerPublicKey(socket));
+        String peerPublicKey = null;
+        if (socket != null) {
+            peerPublicKey = StringUtil.getStringFromKey(networkManager.getPeerPublicKey(socket));
+        }
         networkManager.removePeer(peerPublicKey);
         networkManager.updatePeerConnectionStatus(peerIp, false);
     }

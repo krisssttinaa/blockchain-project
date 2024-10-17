@@ -23,8 +23,6 @@ public class Blockchain {
     private final Deque<String> receivedBlockHashes = new ConcurrentLinkedDeque<>(); // Track recent block hashes
     private final LRUCache<String, Boolean> receivedTransactions = new LRUCache<>(500); // Capacity of 500
     private final ExecutorService miningExecutor = Executors.newSingleThreadExecutor(); // A single thread for mining
-    private final int numTransactionsToMine = Constants.NUM_TRANSACTIONS_TO_MINE; // Number of transactions to mine in a block
-    private final float miningReward = Constants.MINING_REWARD; // Mining reward
     private final int difficulty = Constants.MINING_DIFFICULTY; // Mining difficulty
     private int peerChainTipIndex = -1;  // New field to store the peer's chain tip index
 
@@ -62,6 +60,8 @@ public class Blockchain {
             System.out.println("Mining a new block with " + numTransactionsToMine + " pending transactions...");
 
             List<Transaction> transactionsToMine = new ArrayList<>();
+            // Mining reward
+            float miningReward = Constants.MINING_REWARD;
             Transaction coinbaseTransaction = new CoinbaseTransaction(Main.minerAddress, miningReward);
             coinbaseTransaction.processTransaction();  // Process the coinbase transaction
             transactionsToMine.add(coinbaseTransaction);
@@ -77,7 +77,7 @@ public class Blockchain {
             forkResolution.addBlock(newBlock);  // Add block to ForkResolution for consensus
             addBlockHashToTracking(newBlock.getHash());
             networkManager.broadcastMessage(new Message(MessageType.NEW_BLOCK, new Gson().toJson(newBlock)));
-            System.out.println("BROADCASTED");
+            //System.out.println("BROADCASTED");
         } else {
             System.out.println(unconfirmedTransactions.size() + " transactions in the pool. Not enough transactions to mine yet.");
         }
@@ -135,7 +135,7 @@ public class Blockchain {
         System.out.println("Block added to the chain successfully: " + block.getHash());
         updateUTXOs(block, true);  // Since you're adding the block to the chain, update UTXO pool for main chain
         ageUTXOs();  // Increment confirmations for all UTXOs
-        System.out.println("UTXOs aged and updated.");
+        //System.out.println("UTXOs aged and updated.");
         return true;
     }
 
@@ -224,7 +224,6 @@ public class Blockchain {
 
     synchronized void revertUTXOs(Block block) {
         int currentChainLength = this.getChain().size(); // Get the current length of the blockchain
-
         for (Transaction transaction : block.getTransactions()) {
             // Step 1: Remove outputs created by this block's transactions
             for (TransactionOutput output : transaction.getOutputs()) {
@@ -268,12 +267,10 @@ public class Blockchain {
 
     public void recalculateUTXOConfirmations() {
         System.out.println("Recalculating UTXO confirmations based on the local blockchain state...");
-
         // Reset confirmations for all UTXOs to zero initially
         for (TransactionOutput utxo : Blockchain.UTXOs.values()) {
             utxo.confirmations = 0;
         }
-
         // Iterate over the entire blockchain to update the confirmations
         for (int i = 0; i < chain.size(); i++) {
             Block block = chain.get(i);
@@ -348,7 +345,7 @@ public class Blockchain {
     public void setPeerChainTipIndex(int peerChainTipIndex) {this.peerChainTipIndex = peerChainTipIndex;}
     public int getCurrentChainTip() {return chain.size() - 1;}
     public boolean isBlockInMainChain(Block block) { return chain.contains(block); }
-    public int getNumTransactionsToMine() { return numTransactionsToMine; }
+    public int getNumTransactionsToMine() {return Constants.NUM_TRANSACTIONS_TO_MINE; }
     public Deque<String> getReceivedBlockHashes() { return receivedBlockHashes; }
     public LRUCache<String, Boolean> getReceivedTransactions() { return receivedTransactions; }
     public void setNetworkManager(NetworkManager networkManager) { this.networkManager = networkManager; }
