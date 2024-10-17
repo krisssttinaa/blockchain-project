@@ -74,8 +74,7 @@ public class Blockchain {
             Block newBlock = new Block(chain.size(), chain.get(chain.size() - 1).getHash(), transactionsToMine);
             newBlock.mineBlock(difficulty);
             forkResolution.addBlock(newBlock);  // Add block to ForkResolution for consensus
-            //updateUTXOs(newBlock, true);  // Update UTXO pool
-            //ageUTXOs();  // Increase confirmations of UTXOs
+            addBlockHashToTracking(newBlock.getHash());
             networkManager.broadcastMessage(new Message(MessageType.NEW_BLOCK, new Gson().toJson(newBlock)));
             System.out.println("BROADCASTED");
         } else {
@@ -84,10 +83,6 @@ public class Blockchain {
     }
 
     public synchronized boolean addAndValidateBlock(Block block) {
-        if (receivedBlockHashes.contains(block.getHash())) {
-            System.out.println("Block already received: " + block.getHash());
-            return false;
-        }
         Block lastBlock = chain.get(chain.size() - 1);
         if (!block.getHash().startsWith(StringUtil.getDifficultyString(difficulty))) {
             System.out.println("Block failed PoW validation: incorrect difficulty.");
@@ -138,14 +133,13 @@ public class Blockchain {
         chain.add(block);
         System.out.println("Block added to the chain successfully: " + block.getHash());
         updateUTXOs(block, true);  // Since you're adding the block to the chain, update UTXO pool for main chain
-        addBlockHashToTracking(block.getHash());
         ageUTXOs();  // Increment confirmations for all UTXOs
         System.out.println("UTXOs aged and updated.");
         return true;
     }
 
     // New method for adding a transaction and handling the logic for broadcasting and mining
-    public synchronized boolean handleNewTransaction(Transaction transaction, String peerIp, NetworkManager networkManager, ForkResolution forkResolution) {
+    public synchronized void handleNewTransaction(Transaction transaction, String peerIp, NetworkManager networkManager, ForkResolution forkResolution) {
         if (addTransaction(transaction)) {
             System.out.println("Transaction validated and added to pool.");
             String jsonTransaction = new Gson().toJson(transaction);
@@ -162,10 +156,8 @@ public class Blockchain {
             } else {
                 System.out.println(unconfirmedTransactions.size() + " transactions in the pool, NOT ENOUGH.");
             }
-            return true;
         } else {
             System.out.println("Transaction failed to validate.");
-            return false;
         }
     }
 
@@ -239,6 +231,8 @@ public class Blockchain {
                 if (input.UTXO != null) {
                     Blockchain.UTXOs.put(input.transactionOutputId, input.UTXO);
                     System.out.println("Reverted UTXO re-added: " + input.transactionOutputId);
+                } else {
+                    System.out.println("Error: UTXO missing for input during revert: " + input.transactionOutputId);
                 }
             }
         }
@@ -247,9 +241,13 @@ public class Blockchain {
     public void reAddTransactionsFromDiscardedBlocks(List<Block> discardedBlocks) {
         for (Block block : discardedBlocks) {
             for (Transaction transaction : block.getTransactions()) {
-                if (transaction.isStillValid()) {
+                if (!transaction.sender.equals("COINBASE") && transaction.isStillValid()) {
                     Blockchain.unconfirmedTransactions.add(transaction);
-                    System.out.println("Re-added transaction: " + transaction.transactionId);
+                    System.out.println("Re-added valid transaction: " + transaction.transactionId);
+                } else if (transaction.sender.equals("COINBASE")) {
+                    System.out.println("Skipping re-addition of Coinbase transaction: " + transaction.transactionId);
+                } else {
+                    System.out.println("Skipping invalid transaction: " + transaction.transactionId);
                 }
             }
         }

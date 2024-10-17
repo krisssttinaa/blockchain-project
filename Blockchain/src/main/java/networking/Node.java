@@ -146,7 +146,7 @@ public class Node implements Runnable {
     private void handleBlockchainTipResponse(Message message) {
         try {
             int tipIndex = Integer.parseInt(message.getData());
-           // log("Received blockchain tip from peer " + peerIp + ": " + tipIndex);
+            // log("Received blockchain tip from peer " + peerIp + ": " + tipIndex);
             networkManager.syncWithPeers(tipIndex);
         } catch (NumberFormatException e) {
             log("Invalid blockchain tip received from peer " + peerIp + ": " + message.getData());
@@ -194,8 +194,11 @@ public class Node implements Runnable {
             transaction.recipient = transaction.recipient.replace("\\u003d", "=");
         }
         if (blockchain.getReceivedBlockHashes().contains(receivedBlock.getHash())) {
-            System.out.println("Block already received: " + receivedBlock.getHash());
+            System.out.println("Block ALREADY received: " + receivedBlock.getHash());
             return;
+        }else{
+            System.out.println("NEW BLOCK RECEIVED: " + receivedBlock.getHash());
+            blockchain.addBlockHashToTracking(receivedBlock.getHash());  // Mark the block as processed
         }
         forkResolution.addBlock(receivedBlock);
         log("Block forwarded to ForkResolution for further processing.");

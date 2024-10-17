@@ -82,6 +82,7 @@ public class ForkResolution implements Runnable {
             }
         }
     }
+
     public synchronized void revertCoinbaseTransaction(Block block) {
         Transaction coinbaseTransaction = block.getTransactions().get(0);  // Assuming coinbase is the first transaction
         if (!"COINBASE".equals(coinbaseTransaction.sender)) {
@@ -96,13 +97,66 @@ public class ForkResolution implements Runnable {
 
     // Method to handle chain reorganization if a longer fork is detected
     private void checkForLongerFork(int forkIndex) {
-        List<Block> competingFork = forks.get(forkIndex);
-        if (competingFork != null && competingFork.size() > blockchain.getChain().size() - forkIndex) {
-            System.out.println("Competing fork is longer. Reorganizing chain...");
-            reorganizeChain(competingFork);
-        } else {
-            System.out.println("Current chain is longer or equal. No reorganization needed.");
+        List<Block> forkedBlocks = forks.get(forkIndex);
+        if (forkedBlocks == null || forkedBlocks.isEmpty()) {
+            System.out.println("No competing fork found at index: " + forkIndex);
+            return;
         }
+
+        for (Block forkedBlock : forkedBlocks) {
+            // Calculate the length of the forked chain starting from the forked block
+            List<Block> potentialForkChain = getExtendedForkChain(forkedBlock);
+
+            // Compare the forked chain length to the current chain length beyond the fork point
+            int currentChainLengthFromFork = blockchain.getChain().size() - forkIndex;
+
+            if (potentialForkChain.size() > currentChainLengthFromFork) {
+                System.out.println("Competing fork is longer. Reorganizing chain...");
+                reorganizeChain(potentialForkChain);
+                return; // We reorganized, no need to check other forks at this index
+            }
+        }
+
+        System.out.println("Current chain is longer or equal. No reorganization needed.");
+    }
+
+    // Helper method to extend a forked chain and return its length
+    private List<Block> getExtendedForkChain(Block initialBlock) {
+        List<Block> extendedChain = new ArrayList<>();
+        extendedChain.add(initialBlock);
+
+        int currentIndex = initialBlock.getIndex() + 1;
+        String previousHash = initialBlock.getHash();
+
+        // Try to extend the chain using the blocks in the forks map
+        while (true) {
+            List<Block> nextBlocks = forks.get(currentIndex);
+
+            if (nextBlocks == null || nextBlocks.isEmpty()) {
+                break; // No more extensions possible
+            }
+
+            // Find a block in nextBlocks that matches the previous hash
+            Block nextBlock = null;
+            for (Block block : nextBlocks) {
+                if (block.getPreviousHash().equals(previousHash)) {
+                    nextBlock = block;
+                    break;
+                }
+            }
+
+            if (nextBlock == null) {
+                break; // No valid extension found for this fork
+            }
+
+            // Add the next block to the extended chain
+            extendedChain.add(nextBlock);
+            // Update the index and previous hash to extend further
+            currentIndex++;
+            previousHash = nextBlock.getHash();
+        }
+
+        return extendedChain;
     }
 
     private void reorganizeChain(List<Block> competingChain) {
@@ -148,10 +202,16 @@ public class ForkResolution implements Runnable {
         return discardedBlocks;
     }
 
-    public void addBlock(Block block) {blockQueue.add(block);}
+    public void addBlock(Block block) {
+        blockQueue.add(block);
+    }
+
     private void addBlockToForks(Block block) {
         forks.computeIfAbsent(block.getIndex(), k -> new ArrayList<>()).add(block);
         revertCoinbaseTransaction(block);
     }
-    public List<Block> getForkedBlocks(int index) {return forks.getOrDefault(index, Collections.emptyList());}
+
+    public List<Block> getForkedBlocks(int index) {
+        return forks.getOrDefault(index, Collections.emptyList());
+    }
 }

@@ -48,7 +48,7 @@ public class Transaction {
         }
         if (value == 0) {
             System.out.println("Processing zero-value transaction.");
-            transactionId = calculateHash();
+            //transactionId = calculateHash();
             return true;
         }
         // Step 1: Verify the transaction signature
