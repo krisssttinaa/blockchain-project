@@ -67,7 +67,7 @@ To start more nodes, you can repeat the docker run command, changing the contain
 ```plaintext
 docker run -it --name node1 -p 7778:7777 --network blockchain-network blockchain-node
 ```
-You can continue this process for as many nodes as you'd like, incrementing the port number for each new node.
+You can continue this process for as many nodes as you'd like, incrementing the port number and changing the container name.
 
 ### Stopping and Cleaning Up
 To stop and remove a running container, you can use the following commands:
