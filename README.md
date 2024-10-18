@@ -1,7 +1,5 @@
 # Blockchain Project
 
-## Overview
-
 This project is a basic blockchain implementation where multiple nodes communicate over a peer-to-peer (P2P) network. Each node maintains its own copy of the blockchain, and nodes exchange blocks and transactions to stay synchronized. The project supports mining, transaction validation, and consensus resolution through fork detection.
 
 ---
